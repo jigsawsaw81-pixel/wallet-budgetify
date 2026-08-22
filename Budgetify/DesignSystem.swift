@@ -221,6 +221,7 @@ enum BudgetifyPalette {
     static let surface = Color(light: "FFFFFF", dark: "1C1C1E")
     static let elevated = Color(light: "EAE8E5", dark: "2C2C2E")
     static let cardShadow = Color(light: "000000", dark: "000000").opacity(0.08)
+    static let glassBorder = Color(light: "B8B4AF", dark: "FFFFFF").opacity(0.14)
 
     // Semantic content and state colors.
     static let accent = Color(light: "6D28D9", dark: "A78BFA")
@@ -373,7 +374,14 @@ struct StandardButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         if #available(iOS 26.0, *) {
             configuration.label
-                .buttonStyle(prominent ? .glassProminent : .glass)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(prominent ? BudgetifyPalette.onAccent : BudgetifyPalette.text)
+                .frame(minHeight: 44)
+                .padding(.horizontal, 16)
+                .background(prominent ? BudgetifyPalette.selected : BudgetifyPalette.unselected, in: Capsule())
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .opacity(configuration.isPressed ? 0.86 : 1)
+                .animation(.snappy(duration: 0.18), value: configuration.isPressed)
         } else {
             configuration.label
                 .font(.body.weight(.semibold))
@@ -591,7 +599,7 @@ extension View {
 
     func budgetifyNavigationChrome(clearNavigationBar: Bool = true) -> some View {
         self.toolbarBackground(clearNavigationBar ? .hidden : .automatic, for: .navigationBar)
-            .toolbarColorScheme(.automatic, for: .navigationBar, .tabBar)
+            .toolbarColorScheme(nil, for: .navigationBar, .tabBar)
             .tint(BudgetifyPalette.accent)
     }
 

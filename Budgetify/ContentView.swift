@@ -89,7 +89,9 @@ struct ContentView: View {
         ZStack {
             AmbientBackground()
             TabView(selection: $tab) {
-                ForEach(Array(tabsForRendering.enumerated()), id: \.element) { index, tabItem in
+                let currentTabs = tabsForRendering
+                ForEach(0..<currentTabs.count, id: \.self) { index in
+                    let tabItem = currentTabs[index]
                     tabView(for: tabItem)
                         .tabItem { Label(tabItem.title, systemImage: tabItem.systemImage) }
                         .tag(index)
@@ -99,7 +101,7 @@ struct ContentView: View {
             .toolbarBackground(BudgetifyPalette.surface, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .toolbarBackground(.automatic, for: .tabBar)
-            .toolbarColorScheme(.automatic, for: .tabBar)
+            .toolbarColorScheme(nil, for: .tabBar)
         .onChange(of: visibleTabs) { _, tabs in
             if tab >= tabs.count { tab = max(0, tabs.count - 1) }
             lastNonQuickTab = min(lastNonQuickTab, max(0, tabs.count - 1))
