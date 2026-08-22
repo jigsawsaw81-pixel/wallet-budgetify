@@ -101,13 +101,15 @@ struct ContentView: View {
             .toolbarBackground(.automatic, for: .tabBar)
             .toolbarColorScheme(nil, for: .tabBar)
         .onChange(of: visibleTabs) { _, tabs in
-            if tab >= tabs.count { tab = max(0, tabs.count - 1) }
-            lastNonQuickTab = min(lastNonQuickTab, max(0, tabs.count - 1))
+            let maxIndex = tabs.count > 0 ? tabs.count - 1 : 0
+            if tab > maxIndex { tab = maxIndex }
+            if lastNonQuickTab > maxIndex { lastNonQuickTab = maxIndex }
         }
         .onChange(of: tab) { _, newTab in
             guard tabsForRendering.indices.contains(newTab) else { return }
             if tabsForRendering[newTab] == .quickEntry {
-                tab = min(lastNonQuickTab, max(0, tabsForRendering.count - 1))
+                let maxIndex = tabsForRendering.count > 0 ? tabsForRendering.count - 1 : 0
+                tab = lastNonQuickTab > maxIndex ? maxIndex : lastNonQuickTab
                 open(settings.shortcutDefaultType == .income ? .credit : .debit)
             } else {
                 lastNonQuickTab = newTab
