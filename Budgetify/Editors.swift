@@ -155,7 +155,7 @@ struct CalculatorPad: View {
     private let keys = [["7", "8", "9", "÷"], ["4", "5", "6", "×"], ["1", "2", "3", "−"], [".", "0", "⌫", "="]]
 
     var body: some View {
-        GlassSurface(cornerRadius: 20) {
+        StandardCardSurface(cornerRadius: 20) {
             VStack(spacing: 8) {
                 ForEach(keys, id: \.self) { row in
                     HStack(spacing: 8) {
@@ -163,7 +163,7 @@ struct CalculatorPad: View {
                             Button(key) { press(key) }
                                 .font(.body.weight(.semibold))
                                 .frame(maxWidth: .infinity, minHeight: 48)
-                                .buttonStyle(GlassButtonStyle(prominent: key == "="))
+                                .buttonStyle(StandardButtonStyle(prominent: key == "="))
                         }
                     }
                 }
@@ -350,7 +350,7 @@ struct RecurringEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Commitment") {
+                Section("EMI") {
                     TextField("Name", text: $name)
                     MoneyInputField(text: $amount, title: "Amount")
                     Picker("Kind", selection: $kind) { ForEach(RecurringKind.allCases) { Text($0.title).tag($0) } }
@@ -361,7 +361,7 @@ struct RecurringEditor: View {
                 }
             }
             .budgetifyFormChrome()
-            .navigationTitle(payment == nil ? "New recurring" : "Edit recurring")
+            .navigationTitle(payment == nil ? "New EMI" : "Edit EMI")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button(payment == nil ? "Save" : "Update") { save() }.disabled(!canSave).fontWeight(.bold) }
@@ -409,7 +409,7 @@ struct FixedExpenseEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Fixed expense") {
+                Section("Subscription") {
                     TextField("Name", text: $name)
                     MoneyInputField(text: $amount, title: "Amount")
                     Picker("Frequency", selection: $frequency) { ForEach(FixedFrequency.allCases) { Text($0.title).tag($0) } }
@@ -419,7 +419,7 @@ struct FixedExpenseEditor: View {
                 }
             }
             .budgetifyFormChrome()
-            .navigationTitle(expense == nil ? "New fixed expense" : "Edit fixed expense")
+            .navigationTitle(expense == nil ? "New subscription" : "Edit subscription")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) { Button(expense == nil ? "Save" : "Update") { save() }.disabled(!canSave).fontWeight(.bold) }

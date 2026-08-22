@@ -218,11 +218,9 @@ final class AppSettings: ObservableObject {
 enum BudgetifyPalette {
     // Core surfaces: bright, cool, and deliberately separated in Light mode.
     static let canvas = Color(light: "F2F1EF", dark: "0B0B0C")
-    static let surface = Color(light: "FFFFFF", dark: "151516")
-    static let elevated = Color(light: "EAE8E5", dark: "1D1D1F")
-    static let glassSurface = Color(light: "FFFFFF", dark: "1A1A1C")
-    static let glassBorder = Color(light: "B8B4AF", dark: "FFFFFF").opacity(0.14)
-    static let glassShadow = Color(light: "000000", dark: "000000").opacity(0.24)
+    static let surface = Color(light: "FFFFFF", dark: "1C1C1E")
+    static let elevated = Color(light: "EAE8E5", dark: "2C2C2E")
+    static let cardShadow = Color(light: "000000", dark: "000000").opacity(0.08)
 
     // Semantic content and state colors.
     static let accent = Color(light: "6D28D9", dark: "A78BFA")
@@ -357,60 +355,36 @@ enum MoneyFormatter {
 
 // MARK: - Liquid Glass and shared components
 
-struct GlassSurface<Content: View>: View {
-    var cornerRadius: CGFloat = 22
+struct StandardCardSurface<Content: View>: View {
+    var cornerRadius: CGFloat = 20
     var tint: Color?
     @ViewBuilder var content: () -> Content
 
-    init(cornerRadius: CGFloat = 22, tint: Color? = nil, @ViewBuilder content: @escaping () -> Content) {
-        self.cornerRadius = cornerRadius
-        self.tint = tint
-        self.content = content
-    }
-
     var body: some View {
-        Group {
-            if #available(iOS 26.0, *) {
-                if let tint {
-                    content().padding(1).glassEffect(.regular.tint(tint.opacity(0.12)), in: .rect(cornerRadius: cornerRadius))
-                        .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
-                        .shadow(color: BudgetifyPalette.glassShadow, radius: 16, y: 8)
-                } else {
-                    content().padding(1).glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-                        .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
-                        .shadow(color: BudgetifyPalette.glassShadow, radius: 16, y: 8)
-                }
-            } else {
-                content()
-                    .background(BudgetifyPalette.glassSurface.opacity(0.94), in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
-                    .shadow(color: BudgetifyPalette.glassShadow, radius: 16, y: 8)
-            }
-        }
+        content()
+            .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
     }
 }
 
-struct GlassButtonStyle: ButtonStyle {
+struct StandardButtonStyle: ButtonStyle {
     var prominent = false
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.body.weight(.semibold))
-            .foregroundStyle(prominent ? BudgetifyPalette.onAccent : BudgetifyPalette.text)
-            .frame(minHeight: 44)
-            .padding(.horizontal, 16)
-            .background {
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .fill(prominent ? BudgetifyPalette.selected : BudgetifyPalette.unselected)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 15, style: .continuous)
-                    .stroke(prominent ? BudgetifyPalette.selected.opacity(0.28) : BudgetifyPalette.glassBorder, lineWidth: 0.8)
-            }
-            .shadow(color: prominent ? BudgetifyPalette.selected.opacity(0.18) : BudgetifyPalette.glassShadow, radius: 10, y: 5)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .opacity(configuration.isPressed ? 0.86 : 1)
-            .animation(.snappy(duration: 0.18), value: configuration.isPressed)
+        if #available(iOS 26.0, *) {
+            configuration.label
+                .buttonStyle(prominent ? .glassProminent : .glass)
+        } else {
+            configuration.label
+                .font(.body.weight(.semibold))
+                .foregroundStyle(prominent ? BudgetifyPalette.onAccent : BudgetifyPalette.text)
+                .frame(minHeight: 44)
+                .padding(.horizontal, 16)
+                .background(prominent ? BudgetifyPalette.selected : BudgetifyPalette.unselected, in: Capsule())
+                .scaleEffect(configuration.isPressed ? 0.97 : 1)
+                .opacity(configuration.isPressed ? 0.86 : 1)
+                .animation(.snappy(duration: 0.18), value: configuration.isPressed)
+        }
     }
 }
 
@@ -519,7 +493,7 @@ struct BalanceCardSurface<Content: View>: View {
         content()
             .padding(1)
             .background(LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .shadow(color: BudgetifyPalette.glassShadow, radius: 18, y: 9)
+            .shadow(color: BudgetifyPalette.cardShadow, radius: 24, y: 12)
     }
 }
 
@@ -556,7 +530,7 @@ struct MetricCard: View {
     var icon: String = "chart.line.uptrend.xyaxis"
 
     var body: some View {
-        GlassSurface(cornerRadius: 18, tint: color) {
+        StandardCardSurface(cornerRadius: 18) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 7) {
                     Image(systemName: icon).font(.caption.weight(.bold)).foregroundStyle(color)
@@ -566,6 +540,7 @@ struct MetricCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(14)
+            .background(color.opacity(0.08))
         }
     }
 }
@@ -582,13 +557,12 @@ struct EmptyState: View {
             Image(systemName: icon).font(.title2.weight(.semibold)).foregroundStyle(BudgetifyPalette.teal).frame(width: 58, height: 58).background(BudgetifyPalette.teal.opacity(0.12), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             Text(title).font(.headline.weight(.bold)).foregroundStyle(BudgetifyPalette.text)
             Text(message).font(.body).multilineTextAlignment(.center).foregroundStyle(BudgetifyPalette.secondary).fixedSize(horizontal: false, vertical: true)
-            if let actionTitle, let action { Button(actionTitle, action: action).buttonStyle(GlassButtonStyle(prominent: true)) }
+            if let actionTitle, let action { Button(actionTitle, action: action).buttonStyle(StandardButtonStyle(prominent: true)) }
         }
         .frame(maxWidth: .infinity)
         .padding(30)
-        .background(BudgetifyPalette.glassSurface.opacity(0.96), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
-        .shadow(color: BudgetifyPalette.glassShadow, radius: 16, y: 8)
+        .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
     }
 }
 
@@ -616,7 +590,8 @@ extension View {
     }
 
     func budgetifyNavigationChrome(clearNavigationBar: Bool = true) -> some View {
-        self.toolbarBackground(.hidden, for: .navigationBar)
+        self.toolbarBackground(clearNavigationBar ? .hidden : .automatic, for: .navigationBar)
+            .toolbarColorScheme(.automatic, for: .navigationBar, .tabBar)
             .tint(BudgetifyPalette.accent)
     }
 

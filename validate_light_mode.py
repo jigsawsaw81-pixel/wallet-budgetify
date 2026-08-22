@@ -40,7 +40,7 @@ require(contrast("FFFFFF", "006F6B") >= 5.0, "Selected controls lack sufficient 
 require(contrast("38545F", "E4ECF3") >= 4.5, "Unselected controls lack sufficient Light-mode contrast")
 
 for token in (
-    "canvas", "surface", "elevated", "glassSurface", "glassBorder", "glassShadow",
+    "canvas", "surface", "elevated", "cardShadow",
     "primaryText", "secondaryText", "tertiaryText", "selected", "selectedText",
     "unselected", "unselectedText", "debit", "credit", "warning", "accent",
 ):
@@ -56,12 +56,12 @@ for swift_file in BUDGETIFY.glob("*.swift"):
 
 require("struct HeroBalanceCard" in CONTENT and "BudgetifyPalette.heroText" in CONTENT and "BudgetifyPalette.heroGradientStart" in CONTENT, "Home balance card is not using the semantic hero surface")
 require("BalanceCardSurface" in SCREENS and "BudgetifyPalette.heroText" in SCREENS, "Wallets balance card is not using the semantic hero surface")
-require(CONTENT.count("budgetifyNavigationChrome()") >= 2, "Home and Transactions are missing navigation chrome")
-require(SCREENS.count("budgetifyNavigationChrome()") >= 3, "Wallets and Settings are missing navigation chrome")
+require(CONTENT.count("budgetifyNavigationChrome(") >= 2, "Home and Transactions are missing navigation chrome")
+require(SCREENS.count("budgetifyNavigationChrome(") >= 3, "Wallets and Settings are missing navigation chrome")
 require(EDITORS.count("budgetifyFormChrome()") == 6, "Not every editor uses shared form chrome")
 require(EDITORS.count("presentationBackground(BudgetifyPalette.canvas)") == 6, "Not every editor sheet has a semantic presentation background")
 require("BudgetifyPalette.selected" in CONTENT and "BudgetifyPalette.unselected" in CONTENT, "Chip selected/unselected states are not explicit")
-require("GlassButtonStyle" in EDITORS, "Calculator selected/unselected states are not explicit")
+require("StandardButtonStyle" in EDITORS, "Calculator selected/unselected states are not explicit")
 require("preferredColorScheme(settings.appearance.colorScheme)" in CONTENT or "preferredColorScheme(settings.appearance.colorScheme)" in SCREENS, "System/Light/Dark appearance propagation is missing")
 
 print("Light-mode semantic palette, contrast, surface, navigation, form, and state checks passed.")

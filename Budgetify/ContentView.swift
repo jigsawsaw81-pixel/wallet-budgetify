@@ -98,6 +98,8 @@ struct ContentView: View {
             .tint(BudgetifyPalette.accent)
             .toolbarBackground(BudgetifyPalette.surface, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
+            .toolbarBackground(.automatic, for: .tabBar)
+            .toolbarColorScheme(.automatic, for: .tabBar)
         .onChange(of: visibleTabs) { _, tabs in
             if tab >= tabs.count { tab = max(0, tabs.count - 1) }
             lastNonQuickTab = min(lastNonQuickTab, max(0, tabs.count - 1))
@@ -259,7 +261,7 @@ struct HomeView: View {
                     }
                     if settings.showTodaySpending {
                         SectionHeading(title: "Today", subtitle: "Spending snapshot")
-                        GlassSurface(cornerRadius: 20) {
+                        StandardCardSurface(cornerRadius: 20) {
                             HStack(spacing: 14) {
                                 Image(systemName: "bolt.fill").foregroundStyle(BudgetifyPalette.amber).frame(width: 40, height: 40).background(BudgetifyPalette.amber.opacity(0.14), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
                                 VStack(alignment: .leading, spacing: 3) {
@@ -272,7 +274,7 @@ struct HomeView: View {
                         }
                     }
                     if settings.showForecast {
-                        GlassSurface(cornerRadius: 20) {
+                        StandardCardSurface(cornerRadius: 20) {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Planning outlook").font(.body.weight(.bold)).foregroundStyle(BudgetifyPalette.text)
                                 if settings.showForecast {
@@ -315,8 +317,8 @@ struct HomeView: View {
                                         }
                                 }
                             }
-                            .background(BudgetifyPalette.glassSurface.opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
+                            .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                            .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
                         }
                     }
                 }
@@ -327,12 +329,17 @@ struct HomeView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
-            .budgetifyNavigationChrome()
+            .budgetifyNavigationChrome(clearNavigationBar: false)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingAddActions = true } label: { Image(systemName: "plus") }
-                        .frame(minWidth: 44, minHeight: 44)
-                        .accessibilityLabel("Add budget entry")
+                    Button { showingAddActions = true } label: { 
+                        Image(systemName: "plus")
+                            .font(.body.weight(.semibold))
+                            .frame(width: 32, height: 32)
+                            .background(BudgetifyPalette.surface, in: Circle())
+                            .shadow(color: BudgetifyPalette.cardShadow, radius: 8, y: 2)
+                    }
+                    .accessibilityLabel("Add budget entry")
                 }
             }
             .alert("Delete transaction?", isPresented: $showingDeleteConfirmation) {
@@ -380,7 +387,7 @@ struct HeroBalanceCard: View {
         .padding(20)
         .background(LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing))
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .shadow(color: BudgetifyPalette.glassShadow, radius: 18, y: 9)
+        .shadow(color: BudgetifyPalette.cardShadow, radius: 24, y: 12)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Net worth balance")
     }
@@ -463,8 +470,8 @@ struct TransactionsView: View {
 
                                     }
                                 }
-                                .background(BudgetifyPalette.glassSurface.opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                                .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
+                                .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                                .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
                             }
                         }
                     }
@@ -477,7 +484,7 @@ struct TransactionsView: View {
             .scrollDismissesKeyboard(.interactively)
             .searchable(text: $store.query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search transactions")
             .navigationBarTitleDisplayMode(.inline)
-            .budgetifyNavigationChrome()
+            .budgetifyNavigationChrome(clearNavigationBar: false)
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if isSelecting && !selectedIDs.isEmpty {

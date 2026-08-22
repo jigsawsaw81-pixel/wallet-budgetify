@@ -18,8 +18,8 @@ struct RecurringView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    SectionHeading(title: "Recurring", subtitle: "Your committed monthly rhythm", actionTitle: "Add") { showingRecurring = true }
-                    GlassSurface(cornerRadius: 22, tint: BudgetifyPalette.purple) {
+                    SectionHeading(title: "Plans", subtitle: "Your committed monthly rhythm")
+                    StandardCardSurface(cornerRadius: 22) {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Image(systemName: "wand.and.stars").foregroundStyle(BudgetifyPalette.purple)
@@ -27,12 +27,14 @@ struct RecurringView: View {
                                 Spacer()
                                 AmountText(amount: store.forecast, color: store.forecast >= 0 ? BudgetifyPalette.green : BudgetifyPalette.red, fontSize: 18)
                             }
-                            Text("Balance after pending income, recurring payments, and fixed expenses.").font(.subheadline).foregroundStyle(BudgetifyPalette.secondary)
-                        }.padding(16)
+                            Text("Balance after pending income, EMIs, and subscriptions.").font(.subheadline).foregroundStyle(BudgetifyPalette.secondary)
+                        }
+                        .padding(16)
+                        .background(BudgetifyPalette.purple.opacity(0.08))
                     }
-                    SectionHeading(title: "EMIs & subscriptions", subtitle: "Scheduled commitments", actionTitle: "Add") { showingRecurring = true }
+                    SectionHeading(title: "EMIs", subtitle: "Scheduled commitments", actionTitle: "Add") { showingRecurring = true }
                     if store.recurringPayments.isEmpty {
-                        EmptyState(icon: "calendar.badge.clock", title: "Nothing scheduled", message: "Add an EMI or subscription to keep future commitments visible.", actionTitle: "Add recurring") { showingRecurring = true }
+                        EmptyState(icon: "calendar.badge.clock", title: "Nothing scheduled", message: "Add an EMI to keep future commitments visible.", actionTitle: "Add EMI") { showingRecurring = true }
                     } else {
                         VStack(spacing: 0) {
                             ForEach(store.recurringPayments) { payment in
@@ -52,11 +54,13 @@ struct RecurringView: View {
                                     Button(role: .destructive) { recurringToDelete = payment; showingRecurringDelete = true } label: { Label("Delete", systemImage: "trash") }
                                 }
                             }
-                        }.background(BudgetifyPalette.glassSurface.opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        }
+                        .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
                     }
-                    SectionHeading(title: "Fixed expenses", subtitle: "Recurring by frequency", actionTitle: "Add") { showingFixed = true }
+                    SectionHeading(title: "Subscriptions", subtitle: "Recurring by frequency", actionTitle: "Add") { showingFixed = true }
                     if store.fixedExpenses.isEmpty {
-                        EmptyState(icon: "arrow.clockwise", title: "No fixed expenses", message: "Rent, utilities, and other predictable costs belong here.", actionTitle: "Add fixed expense") { showingFixed = true }
+                        EmptyState(icon: "arrow.clockwise", title: "No subscriptions", message: "Rent, utilities, and other predictable costs belong here.", actionTitle: "Add subscription") { showingFixed = true }
                     } else {
                         VStack(spacing: 0) {
                             ForEach(store.fixedExpenses) { fixed in
@@ -82,27 +86,29 @@ struct RecurringView: View {
                                     Button(role: .destructive) { fixedToDelete = fixed; showingFixedDelete = true } label: { Label("Delete", systemImage: "trash") }
                                 }
                             }
-                        }.background(BudgetifyPalette.glassSurface.opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        }
+                        .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
                     }
                 }.screenPadding().padding(.top, 12).padding(.bottom, 44)
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
-            .budgetifyNavigationChrome()
+            .budgetifyNavigationChrome(clearNavigationBar: false)
         }
         .sheet(isPresented: $showingRecurring) { RecurringEditor() }
         .sheet(isPresented: $showingFixed) { FixedExpenseEditor() }
         .sheet(item: $recurringToEdit) { RecurringEditor(payment: $0) }
         .sheet(item: $fixedToEdit) { FixedExpenseEditor(expense: $0) }
-        .alert("Delete recurring payment?", isPresented: $showingRecurringDelete) {
+        .alert("Delete EMI?", isPresented: $showingRecurringDelete) {
             Button("Delete", role: .destructive) { if let payment = recurringToDelete { store.deleteRecurring(payment) }; recurringToDelete = nil }
             Button("Cancel", role: .cancel) { recurringToDelete = nil }
-        } message: { Text("Delete \(recurringToDelete?.name ?? "this payment")? This does not alter past transactions.") }
-        .alert("Delete fixed expense?", isPresented: $showingFixedDelete) {
+        } message: { Text("Delete \(recurringToDelete?.name ?? "this EMI")? This does not alter past transactions.") }
+        .alert("Delete subscription?", isPresented: $showingFixedDelete) {
             Button("Delete", role: .destructive) { if let expense = fixedToDelete { store.deleteFixed(expense) }; fixedToDelete = nil }
             Button("Cancel", role: .cancel) { fixedToDelete = nil }
-        } message: { Text("Delete \(fixedToDelete?.name ?? "this expense")? This does not alter past transactions.") }
+        } message: { Text("Delete \(fixedToDelete?.name ?? "this subscription")? This does not alter past transactions.") }
     }
 }
 
@@ -177,7 +183,9 @@ struct WalletsView: View {
                                     }
                                 }
                             }
-                        }.background(BudgetifyPalette.glassSurface.opacity(0.96), in: RoundedRectangle(cornerRadius: 20, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8)).shadow(color: BudgetifyPalette.glassShadow, radius: 14, y: 7)
+                        }
+                        .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
                         .budgetifyContextMenu(enabled: settings.holdActionsEnabled) {
                             Button { groupToEdit = group } label: { Label("Edit a/c group", systemImage: "pencil") }
                             Divider()
@@ -189,7 +197,7 @@ struct WalletsView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
-            .budgetifyNavigationChrome()
+            .budgetifyNavigationChrome(clearNavigationBar: false)
         }
         .sheet(isPresented: $showingGroup) { AccountGroupEditor().presentationDetents([.large]).presentationDragIndicator(.visible) }
         .sheet(item: $groupToEdit) { AccountGroupEditor(group: $0).presentationDetents([.large]).presentationDragIndicator(.visible) }
@@ -311,11 +319,11 @@ struct SettingsView: View {
                                 Spacer()
                                 Image(systemName: "line.3.horizontal")
                                     .foregroundStyle(BudgetifyPalette.muted)
-                            }
-                            .contentShape(Rectangle())
-                            .onDrag {
-                                draggedNavbarItem = item
-                                return NSItemProvider(object: item.rawValue as NSString)
+                                    .contentShape(Rectangle())
+                                    .onDrag {
+                                        draggedNavbarItem = item
+                                        return NSItemProvider(object: item.rawValue as NSString)
+                                    }
                             }
                             .onDrop(of: [.text], delegate: NavbarDropDelegate(target: item, tabs: $settings.navbarTabs, draggedItem: $draggedNavbarItem))
                         }
@@ -350,30 +358,33 @@ struct SettingsView: View {
                             .foregroundStyle(BudgetifyPalette.secondary)
                     }
 
-                    settingsSection(title: "Recurring Payments & Fixed Expenses", icon: "calendar.badge.clock") {
-                        Text("Manage scheduled commitments without adding another bottom navigation tab.")
-                            .font(.subheadline)
-                            .foregroundStyle(BudgetifyPalette.secondary)
-                        Button { showingRecurring = true } label: {
-                            Label("Open recurring and fixed expenses", systemImage: "calendar.badge.clock")
+                    settingsSection(title: "Manage", icon: "slider.horizontal.3") {
+                        Button { showingCategories = true } label: {
+                            Label("Categories", systemImage: "tag.fill")
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .buttonStyle(GlassButtonStyle())
+                        .buttonStyle(StandardButtonStyle())
+                        
+                        Button { showingRecurring = true } label: {
+                            Label("EMI & Subscriptions", systemImage: "calendar.badge.clock")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(StandardButtonStyle())
                     }
-
-
 
                     settingsSection(title: "Data & Privacy", icon: "externaldrive.fill") {
                         if let data = store.exportData() {
                             ShareLink(item: data, preview: SharePreview("Wallet backup", image: Image(systemName: "doc.text"))) {
                                 Label("Export all data", systemImage: "arrow.up.doc")
+                                    .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .buttonStyle(GlassButtonStyle())
+                            .buttonStyle(StandardButtonStyle())
                         }
-                        Button { showingImporter = true } label: { Label("Import JSON backup", systemImage: "arrow.down.doc") }
-                            .buttonStyle(GlassButtonStyle())
-                        Button { showingCategories = true } label: { Label("Manage categories", systemImage: "tag.fill") }
-                            .buttonStyle(GlassButtonStyle())
+                        Button { showingImporter = true } label: { 
+                            Label("Import JSON backup", systemImage: "arrow.down.doc")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(StandardButtonStyle())
                         HStack {
                             Label("Last backup", systemImage: "clock")
                             Spacer()
@@ -392,14 +403,14 @@ struct SettingsView: View {
                                 Label("Help & FAQ", systemImage: "questionmark.circle")
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .buttonStyle(GlassButtonStyle())
+                            .buttonStyle(StandardButtonStyle())
                         }
                         if let privacyURL = URL(string: "https://www.apple.com/legal/privacy/") {
                             Link(destination: privacyURL) {
                                 Label("Privacy information", systemImage: "hand.raised")
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .buttonStyle(GlassButtonStyle())
+                            .buttonStyle(StandardButtonStyle())
                         }
                         HStack {
                             Text("Wallet")
@@ -415,9 +426,9 @@ struct SettingsView: View {
                             .font(.subheadline)
                             .foregroundStyle(BudgetifyPalette.secondary)
                         Button(role: .destructive) { showingResetConfirmation = true } label: { Label("Reset demo data", systemImage: "arrow.counterclockwise") }
-                            .buttonStyle(GlassButtonStyle())
+                            .buttonStyle(StandardButtonStyle())
                         Button(role: .destructive) { showingDeleteAllConfirmation = true } label: { Label("Delete all data", systemImage: "trash") }
-                            .buttonStyle(GlassButtonStyle())
+                            .buttonStyle(StandardButtonStyle())
                     }
 
                     Text("Wallet · Liquid Glass ready")
@@ -433,7 +444,7 @@ struct SettingsView: View {
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
-            .budgetifyNavigationChrome()
+            .budgetifyNavigationChrome(clearNavigationBar: false)
         }
         .preferredColorScheme(settings.appearance.colorScheme)
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.json], allowsMultipleSelection: false) { result in
@@ -485,9 +496,8 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 10) { content() }
         }
         .padding(16)
-        .background(BudgetifyPalette.glassSurface.opacity(0.96), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
-        .shadow(color: BudgetifyPalette.glassShadow, radius: 14, y: 7)
+        .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
     }
 }
 
@@ -529,6 +539,12 @@ struct CategoryManagementView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Add category") {
+                    TextField("Category name", text: $newName)
+                    Picker("Type", selection: $selectedType) { ForEach(CategoryType.allCases) { Text($0.title).tag($0) } }
+                    Button { store.addCategory(name: newName, type: selectedType); newName = "" } label: { Label("Create category", systemImage: "plus") }
+                        .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
                 Section("Your categories") {
                     ForEach(store.categories) { category in
                         Button { editingCategory = category } label: {

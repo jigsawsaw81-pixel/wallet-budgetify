@@ -39,7 +39,7 @@ required = {
         "Currency",
         "First day of week",
         "Notifications",
-        "Recurring Payments & Fixed Expenses",
+        "EMI & Subscriptions",
         "Data & Privacy",
         "Delete all data",
         "About & Help",

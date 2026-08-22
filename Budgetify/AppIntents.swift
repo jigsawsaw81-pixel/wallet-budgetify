@@ -426,8 +426,8 @@ struct ShowRecentTransactionsIntent: AppIntent {
 }
 
 struct ShowUpcomingCommitmentsIntent: AppIntent {
-    static var title: LocalizedStringResource = "Show upcoming commitments"
-    static var description = IntentDescription("Show active recurring payments and fixed expenses in Wallet.")
+    static var title: LocalizedStringResource = "Show upcoming plans"
+    static var description = IntentDescription("Show a summary of all active EMIs and subscriptions.")
     static var openAppWhenRun = false
 
     func perform() async throws -> some IntentResult {
@@ -436,7 +436,7 @@ struct ShowUpcomingCommitmentsIntent: AppIntent {
             let recurring = store.recurringPayments.filter(\.isActive).map { "\($0.name), \(MoneyFormatter.string($0.amount))" }
             let fixed = store.fixedExpenses.filter(\.isActive).map { "\($0.name), \(MoneyFormatter.string($0.amount))" }
             let all = recurring + fixed
-            return all.isEmpty ? "There are no upcoming commitments." : "Upcoming commitments: " + all.joined(separator: "; ")
+            return all.isEmpty ? "There are no upcoming plans." : "Upcoming plans: " + all.joined(separator: "; ")
         }
         return .result(dialog: IntentDialog(stringLiteral: result))
     }
@@ -460,6 +460,6 @@ struct BudgetifyShortcuts: AppShortcutsProvider {
         AppShortcut(intent: ShowTodaySpendingIntent(), phrases: ["Show today’s spending in \(.applicationName)"], shortTitle: "Today’s spending", systemImageName: "calendar")
         AppShortcut(intent: ShowMonthSummaryIntent(), phrases: ["Show this month’s summary in \(.applicationName)"], shortTitle: "Month summary", systemImageName: "chart.bar")
         AppShortcut(intent: ShowRecentTransactionsIntent(), phrases: ["Show recent transactions in \(.applicationName)"], shortTitle: "Recent transactions", systemImageName: "list.bullet")
-        AppShortcut(intent: ShowUpcomingCommitmentsIntent(), phrases: ["Show upcoming commitments in \(.applicationName)"], shortTitle: "Upcoming commitments", systemImageName: "calendar.badge.clock")
+        AppShortcut(intent: ShowUpcomingCommitmentsIntent(), phrases: ["Show upcoming plans in \(.applicationName)", "Show EMIs and subscriptions in \(.applicationName)"], shortTitle: "Upcoming plans", systemImageName: "calendar.badge.clock")
     }
 }

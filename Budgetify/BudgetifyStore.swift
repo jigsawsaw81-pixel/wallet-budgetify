@@ -127,8 +127,8 @@ final class BudgetifyStore: ObservableObject {
                 ("Transport", "00D2C8", "car.fill", .expense),
                 ("Housing", "A78BFA", "house.fill", .expense),
                 ("Salary", "10D98A", "briefcase.fill", .income),
-                ("EMIs", "00D2C8", "calendar.badge.clock", .recurring),
-                ("Subscriptions", "C4B5FD", "play.rectangle.fill", .recurring),
+                ("EMIs", "6D28D9", "calendar.badge.clock", .recurring),
+                ("Subscriptions", "8B5CF6", "play.rectangle.fill", .recurring),
                 ("Other", "7BAABB", "ellipsis.circle.fill", .expense)
             ]
             defaults.forEach { modelContext.insert(BudgetCategory(name: $0.0, colorHex: $0.1, symbol: $0.2, type: $0.3)) }
@@ -344,23 +344,23 @@ final class BudgetifyStore: ObservableObject {
     func deleteRecurring(_ payment: RecurringPayment) {
         let snapshot = RecurringUndoSnapshot(id: payment.id, name: payment.name, amount: payment.amount, dayOfMonth: payment.dayOfMonth, walletID: payment.walletID, categoryID: payment.categoryID, kind: payment.kind, isActive: payment.isActive, createdAt: payment.createdAt)
         modelContext.delete(payment)
-        persist(success: "Recurring payment deleted", undo: .recurring(snapshot))
+        persist(success: "EMI deleted", undo: .recurring(snapshot))
     }
 
     func duplicateRecurring(_ payment: RecurringPayment) {
         modelContext.insert(RecurringPayment(name: "Copy of \(payment.name)", amount: payment.amount, dayOfMonth: payment.dayOfMonth, walletID: payment.walletID, categoryID: payment.categoryID, kind: payment.kind, isActive: payment.isActive))
-        persist(success: "Recurring payment duplicated")
+        persist(success: "EMI duplicated")
     }
 
     func deleteFixed(_ expense: FixedExpense) {
         let snapshot = FixedUndoSnapshot(id: expense.id, name: expense.name, amount: expense.amount, frequency: expense.frequency, walletID: expense.walletID, categoryID: expense.categoryID, isActive: expense.isActive, createdAt: expense.createdAt)
         modelContext.delete(expense)
-        persist(success: "Fixed expense deleted", undo: .fixed(snapshot))
+        persist(success: "Subscription deleted", undo: .fixed(snapshot))
     }
 
     func duplicateFixed(_ expense: FixedExpense) {
         modelContext.insert(FixedExpense(name: "Copy of \(expense.name)", amount: expense.amount, frequency: expense.frequency, walletID: expense.walletID, categoryID: expense.categoryID, isActive: expense.isActive))
-        persist(success: "Fixed expense duplicated")
+        persist(success: "Subscription duplicated")
     }
 
     func addGroup(label: String) {
@@ -485,7 +485,7 @@ final class BudgetifyStore: ObservableObject {
     }
 
     func updateRecurring(_ payment: RecurringPayment, name: String, amount: Decimal, day: Int, walletID: UUID, categoryID: UUID, kind: RecurringKind, isActive: Bool? = nil) {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, amount > 0, wallets.contains(where: { $0.id == walletID }), validRecurringCategory(categoryID) else { reportMessage("Complete the recurring payment details with a valid recurring category."); return }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, amount > 0, wallets.contains(where: { $0.id == walletID }), validRecurringCategory(categoryID) else { reportMessage("Complete the EMI details with a valid recurring category."); return }
         payment.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         payment.amount = amount
         payment.dayOfMonth = min(max(day, 1), 31)
@@ -493,40 +493,40 @@ final class BudgetifyStore: ObservableObject {
         payment.categoryID = categoryID
         payment.kind = kind
         if let isActive { payment.isActive = isActive }
-        persist(success: "Recurring payment updated")
+        persist(success: "EMI updated")
     }
 
     func addRecurring(name: String, amount: Decimal, day: Int, walletID: UUID, categoryID: UUID, kind: RecurringKind) {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, amount > 0, wallets.contains(where: { $0.id == walletID }), validRecurringCategory(categoryID) else { reportMessage("Complete the recurring payment details with a valid recurring category."); return }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, amount > 0, wallets.contains(where: { $0.id == walletID }), validRecurringCategory(categoryID) else { reportMessage("Complete the EMI details with a valid recurring category."); return }
         modelContext.insert(RecurringPayment(name: name.trimmingCharacters(in: .whitespacesAndNewlines), amount: amount, dayOfMonth: min(max(day, 1), 31), walletID: walletID, categoryID: categoryID, kind: kind))
-        persist(success: "Recurring payment added")
+        persist(success: "EMI added")
     }
 
     func updateFixed(_ expense: FixedExpense, name: String, amount: Decimal, frequency: FixedFrequency, walletID: UUID, categoryID: UUID, isActive: Bool? = nil) {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, amount > 0, wallets.contains(where: { $0.id == walletID }), validRecurringCategory(categoryID) else { reportMessage("Complete the fixed expense details with a valid recurring category."); return }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, amount > 0, wallets.contains(where: { $0.id == walletID }), validRecurringCategory(categoryID) else { reportMessage("Complete the subscription details with a valid recurring category."); return }
         expense.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         expense.amount = amount
         expense.frequency = frequency
         expense.walletID = walletID
         expense.categoryID = categoryID
         if let isActive { expense.isActive = isActive }
-        persist(success: "Fixed expense updated")
+        persist(success: "Subscription updated")
     }
 
     func addFixed(name: String, amount: Decimal, frequency: FixedFrequency, walletID: UUID, categoryID: UUID) {
-        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, amount > 0, wallets.contains(where: { $0.id == walletID }), validRecurringCategory(categoryID) else { reportMessage("Complete the fixed expense details with a valid recurring category."); return }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, amount > 0, wallets.contains(where: { $0.id == walletID }), validRecurringCategory(categoryID) else { reportMessage("Complete the subscription details with a valid recurring category."); return }
         modelContext.insert(FixedExpense(name: name.trimmingCharacters(in: .whitespacesAndNewlines), amount: amount, frequency: frequency, walletID: walletID, categoryID: categoryID))
-        persist(success: "Fixed expense added")
+        persist(success: "Subscription added")
     }
 
     func setActive(_ active: Bool, for payment: RecurringPayment) {
         payment.isActive = active
-        persist(success: active ? "Recurring payment activated" : "Recurring payment paused")
+        persist(success: active ? "EMI activated" : "EMI paused")
     }
 
     func setActive(_ active: Bool, for expense: FixedExpense) {
         expense.isActive = active
-        persist(success: active ? "Fixed expense activated" : "Fixed expense paused")
+        persist(success: active ? "Subscription activated" : "Subscription paused")
     }
 
     private func validTransactionCategory(_ id: UUID, type: TransactionType) -> Bool {
