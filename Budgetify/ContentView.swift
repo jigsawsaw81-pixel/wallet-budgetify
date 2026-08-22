@@ -90,20 +90,11 @@ struct ContentView: View {
             AmbientBackground()
             BudgetifyTabView(tab: $tab, tabsForRendering: tabsForRendering, showingAddActions: $showingAddActions, onEdit: editTransaction)
                 .onChange(of: visibleTabs) { _, tabs in
-            let maxIndex = tabs.count > 0 ? tabs.count - 1 : 0
-            if tab > maxIndex { tab = maxIndex }
-            if lastNonQuickTab > maxIndex { lastNonQuickTab = maxIndex }
-        }
-        .onChange(of: tab) { _, newTab in
-            guard tabsForRendering.indices.contains(newTab) else { return }
-            if tabsForRendering[newTab] == .quickEntry {
-                let maxIndex = tabsForRendering.count > 0 ? tabsForRendering.count - 1 : 0
-                tab = lastNonQuickTab > maxIndex ? maxIndex : lastNonQuickTab
-                open(settings.shortcutDefaultType == .income ? .credit : .debit)
-            } else {
-                lastNonQuickTab = newTab
-            }
-        }
+                    handleTabsChange(tabs: tabs)
+                }
+                .onChange(of: tab) { _, newTab in
+                    handleTabSelection(newTab: newTab)
+                }
         }
         .confirmationDialog("Add entry", isPresented: $showingAddActions, titleVisibility: .visible) {
             Button("Money In", systemImage: "arrow.down.left") { open(.credit) }
@@ -192,6 +183,24 @@ struct ContentView: View {
     private func editTransaction(_ transaction: BudgetTransaction) {
         selectedTransaction = transaction
         entryRoute = .transaction
+    }
+
+    private func handleTabsChange(tabs: [NavbarTab]) {
+        let maxIndex = tabs.isEmpty ? 0 : tabs.count - 1
+        if tab > maxIndex { tab = maxIndex }
+        if lastNonQuickTab > maxIndex { lastNonQuickTab = maxIndex }
+    }
+
+    private func handleTabSelection(newTab: Int) {
+        let tabs = tabsForRendering
+        guard newTab >= 0 && newTab < tabs.count else { return }
+        if tabs[newTab] == .quickEntry {
+            let maxIndex = tabs.isEmpty ? 0 : tabs.count - 1
+            tab = lastNonQuickTab > maxIndex ? maxIndex : lastNonQuickTab
+            open(settings.shortcutDefaultType == .income ? .credit : .debit)
+        } else {
+            lastNonQuickTab = newTab
+        }
     }
 
     @ViewBuilder
