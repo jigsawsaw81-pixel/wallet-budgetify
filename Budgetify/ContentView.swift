@@ -85,6 +85,12 @@ struct ContentView: View {
         return visibleTabs
     }
 
+    private var toastTaskID: String {
+        let msg = store.successMessage
+        let canUndo = store.canUndo ? "true" : "false"
+        return msg + "-" + canUndo
+    }
+
     var body: some View {
         ZStack {
             AmbientBackground()
@@ -127,12 +133,11 @@ struct ContentView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 11)
-                .background(BudgetifyPalette.glassSurface.opacity(0.96), in: Capsule())
-                .overlay(Capsule().stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
-                .shadow(color: BudgetifyPalette.glassShadow, radius: 12, y: 6)
+                .background(BudgetifyPalette.surface, in: Capsule())
+                .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 6)
                 .padding(.top, 8)
                 .transition(.move(edge: .top).combined(with: .opacity))
-                .task(id: "\(store.successMessage)-\(store.canUndo)") {
+                .task(id: toastTaskID) {
                     try? await Task.sleep(for: .seconds(settings.undoDuration))
                     withAnimation(.snappy) { store.dismissToast() }
                 }
