@@ -90,10 +90,10 @@ struct ContentView: View {
             AmbientBackground()
             TabView(selection: $tab) {
                 ForEach(0..<tabsForRendering.count, id: \.self) { index in
-                    BudgetifyTabContent(tabItem: tabsForRendering[index], showingAddActions: $showingAddActions, onEdit: editTransaction)
+                    let item = tabsForRendering[index]
+                    BudgetifyTabContent(tabItem: item, showingAddActions: $showingAddActions, onEdit: editTransaction)
                         .tabItem {
-                            Image(systemName: tabsForRendering[index].systemImage)
-                            Text(tabsForRendering[index].title)
+                            Label(item.title, systemImage: item.systemImage)
                         }
                         .tag(index)
                 }
