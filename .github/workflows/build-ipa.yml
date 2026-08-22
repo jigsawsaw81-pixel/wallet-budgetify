@@ -1,0 +1,110 @@
+name: Build unsigned Wallet IPA
+
+on:
+  workflow_dispatch:
+    inputs:
+      use_xcode_27_beta:
+        description: "Use an installed Xcode 27 beta / iOS 27 SDK when available"
+        required: true
+        default: false
+        type: boolean
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Cache Xcode module metadata
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
+          key: ${{ runner.os }}-xcode-module-cache-${{ hashFiles('**/*.swift', '**/*.pbxproj', '**/*.xcodeproj/project.pbxproj', '**/*.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-xcode-module-cache-
+
+      - name: Select optional Xcode 27 beta toolchain
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.use_xcode_27_beta }}
+        run: |
+          set -euo pipefail
+          xcode_app="$(find /Applications -maxdepth 1 -type d -name 'Xcode_27*.app' -print | sort -V | tail -n 1)"
+          if [[ -z "$xcode_app" ]]; then
+            echo "No Xcode 27 beta installation was found on this macOS runner. Run again with the option disabled or use a runner image that provides Xcode 27 beta."
+            exit 1
+          fi
+          sudo xcode-select --switch "$xcode_app/Contents/Developer"
+
+      - name: Inspect Xcode environment
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Validate source contracts
+        run: |
+          python3 validate_budgetify_logic.py
+          python3 validate_money_formatting.py
+          python3 validate_light_mode.py
+          python3 validate_update_set.py
+          python3 validate_hold_haptics.py
+
+      - name: Build unsigned archive and package IPA
+        run: |
+          chmod +x scripts/build_unsigned_ipa.sh
+          ./scripts/build_unsigned_ipa.sh
+
+      - name: Capture Wallet screen screenshots
+        if: success()
+        run: |
+          set -euo pipefail
+          device_udid="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ {print $2; exit}')"
+          if [[ -z "$device_udid" ]]; then
+            echo "No suitable iPhone simulator was found."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          xcrun simctl boot "$device_udid" || true
+          xcrun simctl bootstatus "$device_udid" -b
+          mkdir -p build/screenshots
+          for page in home transactions accounts settings; do
+            define="SCREENSHOT_PAGE_$(printf '%s' "$page" | tr '[:lower:]' '[:upper:]')"
+            xcodebuild \
+              -project Wallet.xcodeproj \
+              -scheme Wallet \
+              -configuration Debug \
+              -sdk iphonesimulator \
+              -destination "id=$device_udid" \
+              -derivedDataPath "build/simulator-$page" \
+              OTHER_SWIFT_FLAGS="-D$define" \
+              CODE_SIGNING_ALLOWED=NO \
+              CODE_SIGNING_REQUIRED=NO \
+              build
+            xcrun simctl install "$device_udid" "build/simulator-$page/Build/Products/Debug-iphonesimulator/Wallet.app"
+            xcrun simctl terminate "$device_udid" com.budgetify.native || true
+            xcrun simctl launch --terminate-running-process "$device_udid" com.budgetify.native
+            sleep 3
+            xcrun simctl io "$device_udid" screenshot "build/screenshots/wallet-$page.png"
+          done
+          xcrun simctl shutdown "$device_udid" || true
+
+      - name: Upload Wallet IPA, archive, checksums, report, and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wallet-unsigned-build-${{ github.run_number }}
+          path: |
+            build/Wallet-unsigned.ipa
+            build/Wallet.xcarchive.zip
+            build/SHA256SUMS.txt
+            build/build-report.txt
+            build/xcodebuild-archive.log
+            build/screenshots/*.png
+          if-no-files-found: warn
+          retention-days: 14
