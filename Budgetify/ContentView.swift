@@ -89,12 +89,10 @@ struct ContentView: View {
         ZStack {
             AmbientBackground()
             TabView(selection: $tab) {
-                let currentTabs = tabsForRendering
-                ForEach(0..<currentTabs.count, id: \.self) { index in
-                    let tabItem = currentTabs[index]
+                ForEach(tabsForRendering, id: \.self) { tabItem in
                     tabView(for: tabItem)
                         .tabItem { Label(tabItem.title, systemImage: tabItem.systemImage) }
-                        .tag(index)
+                        .tag(tabsForRendering.firstIndex(of: tabItem) ?? 0)
                 }
             }
             .tint(BudgetifyPalette.accent)
