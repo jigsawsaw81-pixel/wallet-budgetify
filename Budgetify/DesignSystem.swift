@@ -7,6 +7,8 @@ enum NavbarTab: String, CaseIterable, Identifiable, Hashable {
     case home
     case transactions
     case accounts
+    case recurring
+    case quickEntry
     case settings
 
     var id: String { rawValue }
@@ -15,6 +17,8 @@ enum NavbarTab: String, CaseIterable, Identifiable, Hashable {
         case .home: "Home"
         case .transactions: "Transactions"
         case .accounts: "a/c"
+        case .recurring: "Plans"
+        case .quickEntry: "Add"
         case .settings: "Settings"
         }
     }
@@ -23,11 +27,13 @@ enum NavbarTab: String, CaseIterable, Identifiable, Hashable {
         case .home: "house.fill"
         case .transactions: "list.bullet.rectangle.portrait.fill"
         case .accounts: "wallet.pass.fill"
+        case .recurring: "calendar.badge.clock"
+        case .quickEntry: "plus.circle.fill"
         case .settings: "gearshape.fill"
         }
     }
 
-    static var defaults: [NavbarTab] { [.home, .transactions, .accounts, .settings] }
+    static var defaults: [NavbarTab] { [.home, .transactions, .accounts, .quickEntry, .settings] }
 }
 
 enum AppAppearance: String, CaseIterable, Identifiable {
@@ -150,7 +156,21 @@ final class AppSettings: ObservableObject {
         reduceMotionEnabled = defaults.object(forKey: "budgetify.reduceMotionEnabled") as? Bool ?? false
         lastBackupDate = defaults.object(forKey: "budgetify.lastBackupDate") as? Date
         let storedTabs = (defaults.array(forKey: "budgetify.navbarTabs") as? [String] ?? []).compactMap(NavbarTab.init(rawValue:))
-        navbarTabs = storedTabs.isEmpty ? NavbarTab.defaults : storedTabs
+        var sanitizedTabs: [NavbarTab] = []
+        for item in storedTabs where !sanitizedTabs.contains(item) { sanitizedTabs.append(item) }
+        if sanitizedTabs.isEmpty {
+            sanitizedTabs = NavbarTab.defaults
+        } else {
+            if !sanitizedTabs.contains(.settings) {
+                if sanitizedTabs.count == 5 { sanitizedTabs.removeLast() }
+                sanitizedTabs.append(.settings)
+            }
+            if !sanitizedTabs.contains(.quickEntry) && sanitizedTabs.count < 5 {
+                let settingsIndex = sanitizedTabs.firstIndex(of: .settings) ?? sanitizedTabs.endIndex
+                sanitizedTabs.insert(.quickEntry, at: settingsIndex)
+            }
+        }
+        navbarTabs = Array(sanitizedTabs.prefix(5))
         shortcutDefaultType = TransactionType(rawValue: defaults.string(forKey: "budgetify.shortcutDefaultType") ?? TransactionType.expense.rawValue) ?? .expense
         shortcutIncludesCategory = defaults.object(forKey: "budgetify.shortcutIncludesCategory") as? Bool ?? true
         shortcutIncludesNote = defaults.object(forKey: "budgetify.shortcutIncludesNote") as? Bool ?? true
@@ -205,17 +225,17 @@ enum BudgetifyPalette {
     static let glassShadow = Color(light: "000000", dark: "000000").opacity(0.24)
 
     // Semantic content and state colors.
-    static let accent = Color(light: "C95716", dark: "FF7A2F")
+    static let accent = Color(light: "6D28D9", dark: "A78BFA")
     static let teal = accent
-    static let tealDeep = Color(light: "9D3D0E", dark: "C94C13")
+    static let tealDeep = Color(light: "5B21B6", dark: "C4B5FD")
     static let text = Color(light: "1A1917", dark: "F5F2EE")
     static let secondary = Color(light: "625E58", dark: "B6B2AC")
     static let tertiary = Color(light: "827D76", dark: "85817C")
     static let muted = tertiary
     static let green = Color(light: "087A54", dark: "4CD97B")
     static let red = Color(light: "A51F35", dark: "FF6B5F")
-    static let amber = Color(light: "A84D0A", dark: "FFB84D")
-    static let purple = Color(light: "6340A5", dark: "B59AFF")
+    static let amber = Color(light: "9A6700", dark: "F4C95D")
+    static let purple = accent
     static let blue = Color(light: "185BAE", dark: "60A5FA")
     static let debit = red
     static let credit = green
@@ -223,21 +243,21 @@ enum BudgetifyPalette {
     static let primaryText = text
     static let secondaryText = secondary
     static let tertiaryText = tertiary
-    static let selected = Color(light: "C95716", dark: "FF7A2F")
-    static let selectedText = Color(light: "FFFFFF", dark: "1B100A")
+    static let selected = accent
+    static let selectedText = Color(light: "FFFFFF", dark: "FFFFFF")
     static let unselected = Color(light: "E8E5E1", dark: "242426")
     static let unselectedText = Color(light: "625E58", dark: "B7B3AD")
     static let onAccent = selectedText
 
     // Dark, high-contrast balance card tokens shared by Home and Wallets.
-    static let heroGradientStart = Color(light: "3B2A21", dark: "2A201A")
-    static let heroGradientMid = Color(light: "211B17", dark: "1A1715")
-    static let heroGradientEnd = Color(light: "151313", dark: "0E0E0F")
-    static let heroText = Color(light: "F7FFFE", dark: "F2FFFD")
-    static let heroSecondary = Color(light: "FFE0CB", dark: "F2C4A5")
-    static let heroDivider = Color(light: "FFB37F", dark: "FF8C4D").opacity(0.48)
+    static let heroGradientStart = Color(light: "302050", dark: "2B1E46")
+    static let heroGradientMid = Color(light: "1D1728", dark: "191426")
+    static let heroGradientEnd = Color(light: "141117", dark: "0D0B12")
+    static let heroText = Color(light: "F8F5FF", dark: "F8F5FF")
+    static let heroSecondary = Color(light: "DDD1FF", dark: "D6C7FF")
+    static let heroDivider = Color(light: "BFA8FF", dark: "9070E8").opacity(0.48)
     static let heroInset = Color(light: "000000", dark: "FFFFFF").opacity(0.12)
-    static let heroBorder = Color(light: "FF9E66", dark: "FF8A4A").opacity(0.55)
+    static let heroBorder = Color.clear
 
     static let divider = Color(light: "B6C8D4", dark: "FFFFFF").opacity(0.34)
 }
@@ -394,6 +414,23 @@ struct GlassButtonStyle: ButtonStyle {
     }
 }
 
+struct AccountActionButtonStyle: ButtonStyle {
+    let prominent: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .padding(.horizontal, 6)
+            .foregroundStyle(prominent ? BudgetifyPalette.onAccent : BudgetifyPalette.text)
+            .background(prominent ? BudgetifyPalette.selected : BudgetifyPalette.unselected, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(prominent ? BudgetifyPalette.selected.opacity(0.28) : BudgetifyPalette.glassBorder, lineWidth: 0.8))
+            .opacity(configuration.isPressed ? 0.78 : 1)
+    }
+}
+
 struct RupeeSymbol: View {
     var color: Color = BudgetifyPalette.text
     @ScaledMetric(relativeTo: .body) private var scaledFontSize: CGFloat = 24
@@ -482,8 +519,7 @@ struct BalanceCardSurface<Content: View>: View {
         content()
             .padding(1)
             .background(LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(BudgetifyPalette.heroBorder, lineWidth: 0.8))
-            .shadow(color: BudgetifyPalette.accent.opacity(0.18), radius: 26, y: 12)
+            .shadow(color: BudgetifyPalette.glassShadow, radius: 18, y: 9)
     }
 }
 

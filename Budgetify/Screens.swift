@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 import UniformTypeIdentifiers
 
 struct RecurringView: View {
@@ -94,11 +95,11 @@ struct RecurringView: View {
         .sheet(isPresented: $showingFixed) { FixedExpenseEditor() }
         .sheet(item: $recurringToEdit) { RecurringEditor(payment: $0) }
         .sheet(item: $fixedToEdit) { FixedExpenseEditor(expense: $0) }
-        .confirmationDialog("Delete recurring payment?", isPresented: $showingRecurringDelete, titleVisibility: .visible) {
+        .alert("Delete recurring payment?", isPresented: $showingRecurringDelete) {
             Button("Delete", role: .destructive) { if let payment = recurringToDelete { store.deleteRecurring(payment) }; recurringToDelete = nil }
             Button("Cancel", role: .cancel) { recurringToDelete = nil }
         } message: { Text("Delete \(recurringToDelete?.name ?? "this payment")? This does not alter past transactions.") }
-        .confirmationDialog("Delete fixed expense?", isPresented: $showingFixedDelete, titleVisibility: .visible) {
+        .alert("Delete fixed expense?", isPresented: $showingFixedDelete) {
             Button("Delete", role: .destructive) { if let expense = fixedToDelete { store.deleteFixed(expense) }; fixedToDelete = nil }
             Button("Cancel", role: .cancel) { fixedToDelete = nil }
         } message: { Text("Delete \(fixedToDelete?.name ?? "this expense")? This does not alter past transactions.") }
@@ -139,11 +140,15 @@ struct WalletsView: View {
                     BalanceCardSurface {
                         HStack { VStack(alignment: .leading, spacing: 5) { Text("Total balance").font(.subheadline.weight(.medium)).foregroundStyle(BudgetifyPalette.heroSecondary); AmountText(amount: store.grandTotal, color: BudgetifyPalette.heroText, fontSize: 29) }; Spacer(); Image(systemName: "wallet.pass.fill").font(.title.weight(.semibold)).foregroundStyle(BudgetifyPalette.heroSecondary) }.padding(18)
                     }
-                    HStack(spacing: 10) {
-                        Button { showingWallet = true } label: { Label("Add a/c", systemImage: "plus") }.buttonStyle(GlassButtonStyle(prominent: true))
-                        Button { showingGroup = true } label: { Label("Add group", systemImage: "folder.badge.plus") }.buttonStyle(GlassButtonStyle())
-                        Button { showingTransfer = true } label: { Label("Transfer", systemImage: "arrow.left.arrow.right") }.buttonStyle(GlassButtonStyle())
+                    HStack(spacing: 8) {
+                        Button { showingWallet = true } label: { Label("Add a/c", systemImage: "plus") }
+                            .buttonStyle(AccountActionButtonStyle(prominent: true))
+                        Button { showingGroup = true } label: { Label("Add group", systemImage: "folder.badge.plus") }
+                            .buttonStyle(AccountActionButtonStyle(prominent: false))
+                        Button { showingTransfer = true } label: { Label("Transfer", systemImage: "arrow.left.arrow.right") }
+                            .buttonStyle(AccountActionButtonStyle(prominent: false))
                     }
+                    .frame(maxWidth: .infinity)
                     ForEach(store.groups) { group in
                         let groupWallets = store.wallets.filter { $0.groupID == group.id }
                         VStack(spacing: 0) {
@@ -191,11 +196,11 @@ struct WalletsView: View {
         .sheet(isPresented: $showingWallet) { WalletEditor().presentationDetents([.large]).presentationDragIndicator(.visible) }
         .sheet(isPresented: $showingTransfer) { TransferEditor().presentationDetents([.large]).presentationDragIndicator(.visible) }
         .sheet(item: $walletToEdit) { WalletEditor(wallet: $0).presentationDetents([.large]).presentationDragIndicator(.visible) }
-        .confirmationDialog("Delete a/c group?", isPresented: $showingGroupDelete, titleVisibility: .visible) {
+        .alert("Delete a/c group?", isPresented: $showingGroupDelete) {
             Button("Delete", role: .destructive) { if let groupToDelete { store.deleteGroup(groupToDelete) }; groupToDelete = nil }
             Button("Cancel", role: .cancel) { groupToDelete = nil }
         } message: { Text("Delete \(groupToDelete?.label ?? "this group")? Groups with a/cs must be emptied first.") }
-        .confirmationDialog("Delete a/c?", isPresented: $showingWalletDelete, titleVisibility: .visible) {
+        .alert("Delete a/c?", isPresented: $showingWalletDelete) {
             Button("Delete", role: .destructive) { if let wallet = walletToDelete { store.deleteWallet(wallet) }; walletToDelete = nil }
             Button("Cancel", role: .cancel) { walletToDelete = nil }
         } message: { Text("Delete \(walletToDelete?.name ?? "this a/c")? a/cs with linked records must be emptied first.") }
@@ -211,6 +216,8 @@ struct SettingsView: View {
     @State private var showingCategories = false
     @State private var showingRecurring = false
     @State private var showingDeleteAllConfirmation = false
+    @State private var showingNavbarLimit = false
+    @State private var draggedNavbarItem: NavbarTab?
 
     private let weekdayNames = Calendar.current.weekdaySymbols
 
@@ -273,10 +280,52 @@ struct SettingsView: View {
                         Toggle("Today’s spending", isOn: $settings.showTodaySpending).tint(BudgetifyPalette.accent)
                         Toggle("Recent activity", isOn: $settings.showRecentActivity).tint(BudgetifyPalette.accent)
                         Toggle("Planning outlook", isOn: $settings.showForecast).tint(BudgetifyPalette.accent)
+                        Toggle("Active commitments", isOn: $settings.showCommitmentForecast).tint(BudgetifyPalette.accent)
+                    }
+
+                    settingsSection(title: "Navigation Bar", icon: "rectangle.bottomthird.inset.filled") {
+                        Text("Choose up to five destinations or shortcuts. Drag enabled items to change their order; changes apply immediately.")
+                            .font(.subheadline)
+                            .foregroundStyle(BudgetifyPalette.secondary)
+                        ForEach(NavbarTab.allCases) { item in
+                            Toggle(isOn: Binding(
+                                get: { settings.navbarTabs.contains(item) || item == .settings },
+                                set: { enabled in setNavbarItem(item, enabled: enabled) }
+                            )) {
+                                Label(item.title, systemImage: item.systemImage)
+                            }
+                            .tint(BudgetifyPalette.accent)
+                            .disabled(item == .settings || (!settings.navbarTabs.contains(item) && settings.navbarTabs.count >= 5))
+                        }
+                        Divider().overlay(BudgetifyPalette.divider)
+                        Text("Enabled order")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(BudgetifyPalette.text)
+                        ForEach(settings.navbarTabs) { item in
+                            HStack(spacing: 12) {
+                                Image(systemName: item.systemImage)
+                                    .foregroundStyle(BudgetifyPalette.accent)
+                                    .frame(width: 24)
+                                Text(item.title)
+                                    .foregroundStyle(BudgetifyPalette.text)
+                                Spacer()
+                                Image(systemName: "line.3.horizontal")
+                                    .foregroundStyle(BudgetifyPalette.muted)
+                            }
+                            .contentShape(Rectangle())
+                            .onDrag {
+                                draggedNavbarItem = item
+                                return NSItemProvider(object: item.rawValue as NSString)
+                            }
+                            .onDrop(of: [.text], delegate: NavbarDropDelegate(target: item, tabs: $settings.navbarTabs, draggedItem: $draggedNavbarItem))
+                        }
+                        Text("Settings stays available so you can always restore hidden destinations. Add is enabled by default and opens a direct Paying or Receiving form.")
+                            .font(.footnote)
+                            .foregroundStyle(BudgetifyPalette.secondary)
                     }
 
                     settingsSection(title: "Advanced", icon: "slider.horizontal.3") {
-                        Text("Customize shortcut fields and the destinations shown in the native bottom navbar.")
+                        Text("Customize the fields used by the Add shortcut.")
                             .font(.subheadline)
                             .foregroundStyle(BudgetifyPalette.secondary)
                         Picker("Shortcut default", selection: $settings.shortcutDefaultType) {
@@ -288,28 +337,8 @@ struct SettingsView: View {
                         Toggle("Offer note in shortcut", isOn: $settings.shortcutIncludesNote)
                             .tint(BudgetifyPalette.accent)
                         Divider().overlay(BudgetifyPalette.divider)
-                        Text("Bottom navbar")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(BudgetifyPalette.text)
-                        ForEach(NavbarTab.allCases) { item in
-                            Toggle(isOn: Binding(
-                                get: { item == .settings || settings.navbarTabs.contains(item) },
-                                set: { enabled in
-                                    guard item != .settings else { return }
-                                    if enabled {
-                                        if !settings.navbarTabs.contains(item) { settings.navbarTabs.append(item) }
-                                    } else if settings.navbarTabs.count > 1 {
-                                        settings.navbarTabs.removeAll { $0 == item }
-                                    }
-                                }
-                            )) {
-                                Label(item.title, systemImage: item.systemImage)
-                            }
-                            .tint(BudgetifyPalette.accent)
-                            .disabled(item == .settings)
-                        }
-                        Text("Settings is always available and cannot be removed. The native liquid-glass navbar itself is unchanged.")
-                            .font(.footnote)
+                        Text("Customize shortcut fields used by the Add button.")
+                            .font(.subheadline)
                             .foregroundStyle(BudgetifyPalette.secondary)
                     }
 
@@ -421,14 +450,33 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingCategories) { CategoryManagementView() }
         .sheet(isPresented: $showingRecurring) { RecurringView() }
-        .confirmationDialog("Reset demo data?", isPresented: $showingResetConfirmation, titleVisibility: .visible) {
+        .alert("Reset demo data?", isPresented: $showingResetConfirmation) {
             Button("Reset everything", role: .destructive) { store.resetDemoData() }
             Button("Cancel", role: .cancel) { }
         } message: { Text("This removes locally stored records and restores the starter categories and wallet. Export a backup first if you may need the current data.") }
-        .confirmationDialog("Delete all data?", isPresented: $showingDeleteAllConfirmation, titleVisibility: .visible) {
+        .alert("Delete all data?", isPresented: $showingDeleteAllConfirmation) {
             Button("Delete all data", role: .destructive) { store.deleteAllDataPermanently() }
             Button("Cancel", role: .cancel) { }
         } message: { Text("This permanently removes all wallets, groups, categories, transactions, and commitments from this device. Export a backup first if you may need the current data.") }
+        .alert("Navigation Bar is full", isPresented: $showingNavbarLimit) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("The navbar supports up to five buttons. Turn one off before enabling another.")
+        }
+    }
+
+    private func setNavbarItem(_ item: NavbarTab, enabled: Bool) {
+        guard item != .settings else { return }
+        if enabled {
+            guard settings.navbarTabs.count < 5, !settings.navbarTabs.contains(item) else {
+                if settings.navbarTabs.count >= 5 { showingNavbarLimit = true }
+                return
+            }
+            let settingsIndex = settings.navbarTabs.firstIndex(of: .settings) ?? settings.navbarTabs.endIndex
+            settings.navbarTabs.insert(item, at: settingsIndex)
+        } else {
+            settings.navbarTabs.removeAll { $0 == item }
+        }
     }
 
     @ViewBuilder private func settingsSection<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
@@ -440,6 +488,32 @@ struct SettingsView: View {
         .background(BudgetifyPalette.glassSurface.opacity(0.96), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(BudgetifyPalette.glassBorder, lineWidth: 0.8))
         .shadow(color: BudgetifyPalette.glassShadow, radius: 14, y: 7)
+    }
+}
+
+private struct NavbarDropDelegate: DropDelegate {
+    let target: NavbarTab
+    @Binding var tabs: [NavbarTab]
+    @Binding var draggedItem: NavbarTab?
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedItem, draggedItem != target,
+              let sourceIndex = tabs.firstIndex(of: draggedItem),
+              tabs.contains(target) else { return }
+        withAnimation(.snappy) {
+            tabs.remove(at: sourceIndex)
+            let adjustedTarget = tabs.firstIndex(of: target) ?? tabs.endIndex
+            tabs.insert(draggedItem, at: adjustedTarget)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedItem = nil
+        return true
     }
 }
 
@@ -485,7 +559,7 @@ struct CategoryManagementView: View {
             .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Done") { dismiss() } } }
         }
         .sheet(item: $editingCategory) { category in CategoryEditSheet(category: category) }
-        .confirmationDialog("Delete category?", isPresented: $showingDelete, titleVisibility: .visible) {
+        .alert("Delete category?", isPresented: $showingDelete) {
             Button("Delete", role: .destructive) { if let categoryToDelete { store.deleteCategory(categoryToDelete) }; categoryToDelete = nil }
             Button("Cancel", role: .cancel) { categoryToDelete = nil }
         } message: { Text("Delete \(categoryToDelete?.name ?? "this category")? Categories used by existing records cannot be deleted.") }

@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var showingAddActions = false
     @State private var entryRoute: BudgetEntryRoute?
     @State private var selectedTransaction: BudgetTransaction?
+    @State private var lastNonQuickTab = 0
 
     private static func requestedScreenshotTab() -> NavbarTab? {
         #if SCREENSHOT_PAGE_HOME
@@ -55,6 +56,7 @@ struct ContentView: View {
         case .home: requestedIndex = 0
         case .transactions: requestedIndex = 1
         case .accounts: requestedIndex = 2
+        case .recurring, .quickEntry: requestedIndex = 0
         case .settings: requestedIndex = 3
         case nil: requestedIndex = 0
         }
@@ -68,9 +70,12 @@ struct ContentView: View {
     }
 
     private var visibleTabs: [NavbarTab] {
-        var tabs = settings.navbarTabs.filter { $0 != .settings }
-        tabs.append(.settings)
-        return tabs
+        var tabs: [NavbarTab] = []
+        for item in settings.navbarTabs where !tabs.contains(item) {
+            tabs.append(item)
+        }
+        if !tabs.contains(.settings) { tabs.append(.settings) }
+        return Array(tabs.prefix(5))
     }
 
     private var tabsForRendering: [NavbarTab] {
@@ -93,9 +98,19 @@ struct ContentView: View {
             .tint(BudgetifyPalette.accent)
             .toolbarBackground(BudgetifyPalette.surface, for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
-            .onChange(of: visibleTabs) { _, tabs in
-                if tab >= tabs.count { tab = max(0, tabs.count - 1) }
+        .onChange(of: visibleTabs) { _, tabs in
+            if tab >= tabs.count { tab = max(0, tabs.count - 1) }
+            lastNonQuickTab = min(lastNonQuickTab, max(0, tabs.count - 1))
+        }
+        .onChange(of: tab) { _, newTab in
+            guard tabsForRendering.indices.contains(newTab) else { return }
+            if tabsForRendering[newTab] == .quickEntry {
+                tab = min(lastNonQuickTab, max(0, tabsForRendering.count - 1))
+                open(settings.shortcutDefaultType == .income ? .credit : .debit)
+            } else {
+                lastNonQuickTab = newTab
             }
+        }
         }
         .confirmationDialog("Add entry", isPresented: $showingAddActions, titleVisibility: .visible) {
             Button("Money In", systemImage: "arrow.down.left") { open(.credit) }
@@ -188,6 +203,10 @@ struct ContentView: View {
             TransactionsView(showingAddActions: $showingAddActions, onEdit: editTransaction)
         case .accounts:
             WalletsView()
+        case .quickEntry:
+            Color.clear
+        case .recurring:
+            RecurringView()
         case .settings:
             SettingsView()
         }
@@ -252,7 +271,7 @@ struct HomeView: View {
                             }.padding(14)
                         }
                     }
-                    if settings.showForecast || settings.showCommitmentForecast {
+                    if settings.showForecast {
                         GlassSurface(cornerRadius: 20) {
                             VStack(alignment: .leading, spacing: 12) {
                                 Text("Planning outlook").font(.body.weight(.bold)).foregroundStyle(BudgetifyPalette.text)
@@ -316,7 +335,7 @@ struct HomeView: View {
                         .accessibilityLabel("Add budget entry")
                 }
             }
-            .confirmationDialog("Delete transaction?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+            .alert("Delete transaction?", isPresented: $showingDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     if let transactionToDelete {
                         store.deleteTransaction(transactionToDelete, allowsUndo: settings.undoAfterDeletionEnabled)
@@ -361,8 +380,7 @@ struct HeroBalanceCard: View {
         .padding(20)
         .background(LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing))
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 26, style: .continuous).stroke(BudgetifyPalette.heroBorder, lineWidth: 0.8))
-        .shadow(color: BudgetifyPalette.teal.opacity(0.18), radius: 28, y: 12)
+        .shadow(color: BudgetifyPalette.glassShadow, radius: 18, y: 9)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Net worth balance")
     }
@@ -475,7 +493,7 @@ struct TransactionsView: View {
                 }
             }
         }
-        .confirmationDialog("Delete transactions?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) {
+        .alert("Delete transactions?", isPresented: $showingDeleteConfirmation) {
             if let transactionToDelete {
                 Button("Delete", role: .destructive) {
                     store.deleteTransaction(transactionToDelete, allowsUndo: settings.undoAfterDeletionEnabled)

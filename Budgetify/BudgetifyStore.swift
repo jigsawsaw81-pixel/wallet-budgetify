@@ -117,18 +117,18 @@ final class BudgetifyStore: ObservableObject {
             let work = UUID()
             [
                 AccountGroup(id: mine, label: "Mine", colorHex: "00D2C8", symbol: "person.fill", sortOrder: 0),
-                AccountGroup(id: others, label: "Others", colorHex: "FFB340", symbol: "person.2.fill", sortOrder: 1),
+                AccountGroup(id: others, label: "Others", colorHex: "8B5CF6", symbol: "person.2.fill", sortOrder: 1),
                 AccountGroup(id: work, label: "Work", colorHex: "10D98A", symbol: "briefcase.fill", sortOrder: 2)
             ].forEach(modelContext.insert)
             modelContext.insert(Wallet(name: "Main Bank", colorHex: "00D2C8", symbol: "building.columns.fill", kind: .bank, groupID: mine))
             let defaults: [(String, String, String, CategoryType)] = [
-                ("Food", "FFB340", "fork.knife", .expense),
-                ("Shopping", "FF5C6A", "bag.fill", .expense),
+                ("Food", "6D28D9", "fork.knife", .expense),
+                ("Shopping", "8B5CF6", "bag.fill", .expense),
                 ("Transport", "00D2C8", "car.fill", .expense),
                 ("Housing", "A78BFA", "house.fill", .expense),
                 ("Salary", "10D98A", "briefcase.fill", .income),
                 ("EMIs", "00D2C8", "calendar.badge.clock", .recurring),
-                ("Subscriptions", "FFB340", "play.rectangle.fill", .recurring),
+                ("Subscriptions", "C4B5FD", "play.rectangle.fill", .recurring),
                 ("Other", "7BAABB", "ellipsis.circle.fill", .expense)
             ]
             defaults.forEach { modelContext.insert(BudgetCategory(name: $0.0, colorHex: $0.1, symbol: $0.2, type: $0.3)) }
@@ -412,7 +412,7 @@ final class BudgetifyStore: ObservableObject {
     func addCategory(name: String, type: CategoryType) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, !categories.contains(where: { $0.name.caseInsensitiveCompare(cleanName) == .orderedSame && $0.type == type }) else { reportMessage("A category with this name already exists."); return }
-        modelContext.insert(BudgetCategory(name: cleanName, colorHex: type == .income ? "4CD97B" : "FF7A2F", symbol: type == .income ? "arrow.down.left" : "tag.fill", type: type))
+        modelContext.insert(BudgetCategory(name: cleanName, colorHex: type == .income ? "4CD97B" : "6D28D9", symbol: type == .income ? "arrow.down.left" : "tag.fill", type: type))
         persist(success: "Category created")
     }
 
@@ -423,7 +423,7 @@ final class BudgetifyStore: ObservableObject {
         guard !transactions.contains(where: { $0.categoryID == category.id }) || category.type == type else { reportMessage("This category is used by existing transactions, so its type cannot change."); return }
         category.name = cleanName
         category.type = type
-        category.colorHex = type == .income ? "4CD97B" : "FF7A2F"
+        category.colorHex = type == .income ? "4CD97B" : "6D28D9"
         persist(success: "Category updated")
     }
 
