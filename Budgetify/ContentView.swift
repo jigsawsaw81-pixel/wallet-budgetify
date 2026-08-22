@@ -89,12 +89,11 @@ struct ContentView: View {
         ZStack {
             AmbientBackground()
             TabView(selection: $tab) {
-                let items = tabsForRendering
-                ForEach(0..<items.count, id: \.self) { index in
-                    BudgetifyTabContent(tabItem: items[index], showingAddActions: $showingAddActions, onEdit: editTransaction)
+                ForEach(Array(tabsForRendering.enumerated()), id: \.element) { index, tabItem in
+                    BudgetifyTabContent(tabItem: tabItem, showingAddActions: $showingAddActions, onEdit: editTransaction)
                         .tabItem {
-                            Image(systemName: items[index].systemImage)
-                            Text(items[index].title)
+                            Image(systemName: tabItem.systemImage)
+                            Text(tabItem.title)
                         }
                         .tag(index)
                 }
@@ -226,19 +225,19 @@ struct BudgetifyTabContent: View {
     @Binding var showingAddActions: Bool
     let onEdit: (BudgetTransaction) -> Void
 
+    @ViewBuilder
     var body: some View {
-        switch tabItem {
-        case .home:
+        if tabItem == .home {
             HomeView(showingAddActions: $showingAddActions, onEdit: onEdit)
-        case .transactions:
+        } else if tabItem == .transactions {
             TransactionsView(showingAddActions: $showingAddActions, onEdit: onEdit)
-        case .accounts:
+        } else if tabItem == .accounts {
             WalletsView()
-        case .quickEntry:
+        } else if tabItem == .quickEntry {
             Color.clear
-        case .recurring:
+        } else if tabItem == .recurring {
             RecurringView()
-        case .settings:
+        } else if tabItem == .settings {
             SettingsView()
         }
     }
