@@ -91,7 +91,10 @@ struct ContentView: View {
             TabView(selection: $tab) {
                 ForEach(tabsForRendering, id: \.self) { tabItem in
                     tabView(for: tabItem)
-                        .tabItem { Label(tabItem.title, systemImage: tabItem.systemImage) }
+                        .tabItem {
+                            Image(systemName: tabItem.systemImage)
+                            Text(tabItem.title)
+                        }
                         .tag(tabsForRendering.firstIndex(of: tabItem) ?? 0)
                 }
             }
