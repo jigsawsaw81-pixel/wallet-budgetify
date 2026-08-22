@@ -88,21 +88,8 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             AmbientBackground()
-            TabView(selection: $tab) {
-                ForEach(Array(tabsForRendering.enumerated()), id: \.offset) { index, item in
-                    BudgetifyTabContent(tabItem: item, showingAddActions: $showingAddActions, onEdit: editTransaction)
-                        .tabItem {
-                            Label(item.title, systemImage: item.systemImage)
-                        }
-                        .tag(index)
-                }
-            }
-            .tint(BudgetifyPalette.accent)
-            .toolbarBackground(BudgetifyPalette.surface, for: .tabBar)
-            .toolbarBackground(.visible, for: .tabBar)
-            .toolbarBackground(.automatic, for: .tabBar)
-            .toolbarColorScheme(nil, for: .tabBar)
-        .onChange(of: visibleTabs) { _, tabs in
+            BudgetifyTabView(tab: $tab, tabsForRendering: tabsForRendering, showingAddActions: $showingAddActions, onEdit: editTransaction)
+                .onChange(of: visibleTabs) { _, tabs in
             let maxIndex = tabs.count > 0 ? tabs.count - 1 : 0
             if tab > maxIndex { tab = maxIndex }
             if lastNonQuickTab > maxIndex { lastNonQuickTab = maxIndex }
@@ -216,6 +203,30 @@ struct ContentView: View {
         case .recurring: RecurringEditor()
         case .fixed: FixedExpenseEditor()
         }
+    }
+}
+
+struct BudgetifyTabView: View {
+    @Binding var tab: Int
+    let tabsForRendering: [NavbarTab]
+    @Binding var showingAddActions: Bool
+    let onEdit: (BudgetTransaction) -> Void
+
+    var body: some View {
+        TabView(selection: $tab) {
+            ForEach(Array(tabsForRendering.enumerated()), id: \.offset) { index, item in
+                BudgetifyTabContent(tabItem: item, showingAddActions: $showingAddActions, onEdit: onEdit)
+                    .tabItem {
+                        Label(item.title, systemImage: item.systemImage)
+                    }
+                    .tag(index)
+            }
+        }
+        .tint(BudgetifyPalette.accent)
+        .toolbarBackground(BudgetifyPalette.surface, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
+        .toolbarBackground(.automatic, for: .tabBar)
+        .toolbarColorScheme(nil, for: .tabBar)
     }
 }
 
