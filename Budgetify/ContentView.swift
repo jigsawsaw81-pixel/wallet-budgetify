@@ -89,13 +89,13 @@ struct ContentView: View {
         ZStack {
             AmbientBackground()
             TabView(selection: $tab) {
-                ForEach(tabsForRendering, id: \.self) { tabItem in
-                    tabView(for: tabItem)
+                ForEach(Array(tabsForRendering.enumerated()), id: \.element) { index, tabItem in
+                    BudgetifyTabContent(tabItem: tabItem, showingAddActions: $showingAddActions, onEdit: editTransaction)
                         .tabItem {
                             Image(systemName: tabItem.systemImage)
                             Text(tabItem.title)
                         }
-                        .tag(tabsForRendering.firstIndex(of: tabItem) ?? 0)
+                        .tag(index)
                 }
             }
             .tint(BudgetifyPalette.accent)
@@ -201,23 +201,7 @@ struct ContentView: View {
         entryRoute = route
     }
 
-    @ViewBuilder
-    private func tabView(for tabItem: NavbarTab) -> some View {
-        switch tabItem {
-        case .home:
-            HomeView(showingAddActions: $showingAddActions, onEdit: editTransaction)
-        case .transactions:
-            TransactionsView(showingAddActions: $showingAddActions, onEdit: editTransaction)
-        case .accounts:
-            WalletsView()
-        case .quickEntry:
-            Color.clear
-        case .recurring:
-            RecurringView()
-        case .settings:
-            SettingsView()
-        }
-    }
+
 
     private func editTransaction(_ transaction: BudgetTransaction) {
         selectedTransaction = transaction
@@ -232,6 +216,29 @@ struct ContentView: View {
         case .transaction: TransactionEditor(transaction: selectedTransaction, defaultType: selectedTransaction?.type ?? settings.defaultTransactionType)
         case .recurring: RecurringEditor()
         case .fixed: FixedExpenseEditor()
+        }
+    }
+}
+
+struct BudgetifyTabContent: View {
+    let tabItem: NavbarTab
+    @Binding var showingAddActions: Bool
+    let onEdit: (BudgetTransaction) -> Void
+
+    var body: some View {
+        switch tabItem {
+        case .home:
+            HomeView(showingAddActions: $showingAddActions, onEdit: onEdit)
+        case .transactions:
+            TransactionsView(showingAddActions: $showingAddActions, onEdit: onEdit)
+        case .accounts:
+            WalletsView()
+        case .quickEntry:
+            Color.clear
+        case .recurring:
+            RecurringView()
+        case .settings:
+            SettingsView()
         }
     }
 }
