@@ -89,13 +89,11 @@ struct ContentView: View {
         ZStack {
             AmbientBackground()
             TabView(selection: $tab) {
-                let items = tabsForRendering
-                ForEach(0..<items.count, id: \.self) { index in
-                    let item = items[index]
-                    BudgetifyTabContent(tabItem: item, showingAddActions: $showingAddActions, onEdit: editTransaction)
+                ForEach(0..<tabsForRendering.count, id: \.self) { index in
+                    BudgetifyTabContent(tabItem: tabsForRendering[index], showingAddActions: $showingAddActions, onEdit: editTransaction)
                         .tabItem {
-                            Image(systemName: item.systemImage)
-                            Text(item.title)
+                            Image(systemName: tabsForRendering[index].systemImage)
+                            Text(tabsForRendering[index].title)
                         }
                         .tag(index)
                 }
