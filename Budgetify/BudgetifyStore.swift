@@ -16,6 +16,7 @@ private struct TransactionUndoSnapshot {
     let status: PaymentStatus?
     let paymentMethod: String?
     let notes: String?
+    let transferID: UUID?
     let createdAt: Date
 }
 
@@ -211,6 +212,18 @@ final class BudgetifyStore: ObservableObject {
     func wallet(for transaction: BudgetTransaction) -> Wallet? { wallets.first { $0.id == transaction.walletID } }
     func group(for wallet: Wallet) -> AccountGroup? { groups.first { $0.id == wallet.groupID } }
 
+    func transferEntries(for transaction: BudgetTransaction) -> [BudgetTransaction] {
+        guard transaction.isTransfer else { return [transaction] }
+        if let transferID = transaction.transferID {
+            let linked = transactions.filter { $0.transferID == transferID }
+            return linked.isEmpty ? [transaction] : linked
+        }
+        let legacyMatches = transactions.filter {
+            $0.id != transaction.id && $0.isTransfer && $0.amount == transaction.amount && $0.notes == transaction.notes && $0.type != transaction.type && abs($0.createdAt.timeIntervalSince(transaction.createdAt)) < 1
+        }
+        return [transaction] + Array(legacyMatches.prefix(1))
+    }
+
     func transactions(for group: TransactionGroup) -> [BudgetTransaction] {
         let calendar = Calendar.current
         return filteredTransactions.filter { transaction in
@@ -273,8 +286,9 @@ final class BudgetifyStore: ObservableObject {
             existing.paymentMethod == "Internal transfer" && existing.amount == amount && existing.walletID == from.id && existing.notes == cleanNote && abs(existing.createdAt.timeIntervalSince(date)) < 90
         }
         guard !duplicate else { throw BudgetifyIntentError(message: "This transfer already appears to have been completed.") }
-        let outgoing = BudgetTransaction(amount: amount, title: "Transfer to \(to.name)", categoryID: category.id, walletID: from.id, type: .expense, status: .received, paymentMethod: "Internal transfer", notes: cleanNote, createdAt: date)
-        let incoming = BudgetTransaction(amount: amount, title: "Transfer from \(from.name)", categoryID: category.id, walletID: to.id, type: .income, status: .received, paymentMethod: "Internal transfer", notes: cleanNote, createdAt: date)
+        let transferID = UUID()
+        let outgoing = BudgetTransaction(amount: amount, title: "Transfer to \(to.name)", categoryID: category.id, walletID: from.id, type: .expense, status: .received, paymentMethod: "Internal transfer", notes: cleanNote, transferID: transferID, createdAt: date)
+        let incoming = BudgetTransaction(amount: amount, title: "Transfer from \(from.name)", categoryID: category.id, walletID: to.id, type: .income, status: .received, paymentMethod: "Internal transfer", notes: cleanNote, transferID: transferID, createdAt: date)
         modelContext.insert(outgoing)
         modelContext.insert(incoming)
         do {
@@ -305,10 +319,35 @@ final class BudgetifyStore: ObservableObject {
         persist(success: "Transaction updated")
     }
 
+    func updateTransfer(_ transaction: BudgetTransaction, from: Wallet, to: Wallet, amount: Decimal, date: Date, note: String? = nil) {
+        guard amount > 0 else { reportMessage("Transfer amount must be greater than zero."); return }
+        guard from.id != to.id, wallets.contains(where: { $0.id == from.id }), wallets.contains(where: { $0.id == to.id }) else { reportMessage("Choose two different a/cs."); return }
+        let entries = transferEntries(for: transaction)
+        guard let outgoing = entries.first(where: { $0.type == .expense }), let incoming = entries.first(where: { $0.type == .income }) else {
+            reportMessage("This transfer is missing its paired record and cannot be edited safely.")
+            return
+        }
+        let available = balance(for: from)
+            - (incoming.walletID == from.id ? incoming.amount : .zero)
+            + (outgoing.walletID == from.id ? outgoing.amount : .zero)
+        guard available >= amount else { reportMessage("The source a/c does not have enough available balance."); return }
+        guard let category = categories.first(where: { $0.name.caseInsensitiveCompare("Other") == .orderedSame }) else { reportMessage("A transfer category is unavailable."); return }
+        let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let transferID = outgoing.transferID ?? incoming.transferID ?? UUID()
+        outgoing.amount = amount; outgoing.title = "Transfer to \(to.name)"; outgoing.categoryID = category.id; outgoing.walletID = from.id; outgoing.type = .expense; outgoing.status = .received; outgoing.paymentMethod = "Internal transfer"; outgoing.notes = cleanNote; outgoing.transferID = transferID; outgoing.createdAt = date
+        incoming.amount = amount; incoming.title = "Transfer from \(from.name)"; incoming.categoryID = category.id; incoming.walletID = to.id; incoming.type = .income; incoming.status = .received; incoming.paymentMethod = "Internal transfer"; incoming.notes = cleanNote; incoming.transferID = transferID; incoming.createdAt = date
+        persist(success: "Transfer updated")
+    }
+
     func deleteTransaction(_ transaction: BudgetTransaction, allowsUndo: Bool = true) {
-        let snapshot = TransactionUndoSnapshot(id: transaction.id, amount: transaction.amount, title: transaction.title, categoryID: transaction.categoryID, walletID: transaction.walletID, type: transaction.type, status: transaction.status, paymentMethod: transaction.paymentMethod, notes: transaction.notes, createdAt: transaction.createdAt)
-        modelContext.delete(transaction)
-        persist(success: "Transaction deleted", undo: allowsUndo ? .transaction(snapshot) : nil)
+        let entries = transferEntries(for: transaction)
+        let snapshots = entries.map { transaction in
+            TransactionUndoSnapshot(id: transaction.id, amount: transaction.amount, title: transaction.title, categoryID: transaction.categoryID, walletID: transaction.walletID, type: transaction.type, status: transaction.status, paymentMethod: transaction.paymentMethod, notes: transaction.notes, transferID: transaction.transferID, createdAt: transaction.createdAt)
+        }
+        entries.forEach { modelContext.delete($0) }
+        let message = transaction.isTransfer ? "Transfer deleted" : "Transaction deleted"
+        let undo: UndoPayload? = allowsUndo ? (snapshots.count == 1 ? .transaction(snapshots[0]) : .transactions(snapshots)) : nil
+        persist(success: message, undo: undo)
     }
 
     func deleteTransactions(_ transactionsToDelete: [BudgetTransaction], allowsUndo: Bool = true) {
@@ -317,11 +356,15 @@ final class BudgetifyStore: ObservableObject {
 
     func batchDeleteTransactions(_ transactionsToDelete: [BudgetTransaction], allowsUndo: Bool = true) {
         guard !transactionsToDelete.isEmpty else { return }
-        let snapshots = transactionsToDelete.map { transaction in
-            TransactionUndoSnapshot(id: transaction.id, amount: transaction.amount, title: transaction.title, categoryID: transaction.categoryID, walletID: transaction.walletID, type: transaction.type, status: transaction.status, paymentMethod: transaction.paymentMethod, notes: transaction.notes, createdAt: transaction.createdAt)
+        var entries = [BudgetTransaction]()
+        for transaction in transactionsToDelete + transactionsToDelete.flatMap(transferEntries(for:)) where !entries.contains(where: { $0.id == transaction.id }) {
+            entries.append(transaction)
         }
-        transactionsToDelete.forEach { modelContext.delete($0) }
-        persist(success: "\(transactionsToDelete.count) transactions deleted", undo: allowsUndo ? .transactions(snapshots) : nil)
+        let snapshots = entries.map { transaction in
+            TransactionUndoSnapshot(id: transaction.id, amount: transaction.amount, title: transaction.title, categoryID: transaction.categoryID, walletID: transaction.walletID, type: transaction.type, status: transaction.status, paymentMethod: transaction.paymentMethod, notes: transaction.notes, transferID: transaction.transferID, createdAt: transaction.createdAt)
+        }
+        entries.forEach { modelContext.delete($0) }
+        persist(success: "\(entries.count) transactions deleted", undo: allowsUndo ? .transactions(snapshots) : nil)
     }
 
     func duplicateTransaction(_ transaction: BudgetTransaction) {
@@ -409,14 +452,16 @@ final class BudgetifyStore: ObservableObject {
         persist(success: "a/c deleted", undo: .wallet(snapshot))
     }
 
-    func addCategory(name: String, type: CategoryType) {
+    func addCategory(name: String, type: CategoryType, symbol: String? = nil) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty, !categories.contains(where: { $0.name.caseInsensitiveCompare(cleanName) == .orderedSame && $0.type == type }) else { reportMessage("A category with this name already exists."); return }
-        modelContext.insert(BudgetCategory(name: cleanName, colorHex: type == .income ? "4CD97B" : "6D28D9", symbol: type == .income ? "arrow.down.left" : "tag.fill", type: type))
+        let fallback = type == .income ? "arrow.down.left" : "tag.fill"
+        let cleanSymbol = symbol?.trimmingCharacters(in: .whitespacesAndNewlines)
+        modelContext.insert(BudgetCategory(name: cleanName, colorHex: type == .income ? "4CD97B" : "6D28D9", symbol: cleanSymbol?.isEmpty == false ? cleanSymbol! : fallback, type: type))
         persist(success: "Category created")
     }
 
-    func updateCategory(_ category: BudgetCategory, name: String, type: CategoryType) {
+    func updateCategory(_ category: BudgetCategory, name: String, type: CategoryType, symbol: String? = nil) {
         let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanName.isEmpty else { reportMessage("Enter a category name."); return }
         guard !categories.contains(where: { $0.id != category.id && $0.name.caseInsensitiveCompare(cleanName) == .orderedSame && $0.type == type }) else { reportMessage("A category with this name already exists."); return }
@@ -424,6 +469,7 @@ final class BudgetifyStore: ObservableObject {
         category.name = cleanName
         category.type = type
         category.colorHex = type == .income ? "4CD97B" : "6D28D9"
+        if let symbol, !symbol.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { category.symbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines) }
         persist(success: "Category updated")
     }
 
@@ -472,8 +518,9 @@ final class BudgetifyStore: ObservableObject {
         guard balance(for: from) >= amount else { reportMessage("The source a/c does not have enough available balance."); return }
         guard let category = categories.first(where: { $0.name == "Other" }) else { reportMessage("A transfer category is unavailable."); return }
         let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
-        modelContext.insert(BudgetTransaction(amount: amount, title: "Transfer to \(to.name)", categoryID: category.id, walletID: from.id, type: .expense, status: .received, paymentMethod: "Internal transfer", notes: cleanNote, createdAt: date))
-        modelContext.insert(BudgetTransaction(amount: amount, title: "Transfer from \(from.name)", categoryID: category.id, walletID: to.id, type: .income, status: .received, paymentMethod: "Internal transfer", notes: cleanNote, createdAt: date))
+        let transferID = UUID()
+        modelContext.insert(BudgetTransaction(amount: amount, title: "Transfer to \(to.name)", categoryID: category.id, walletID: from.id, type: .expense, status: .received, paymentMethod: "Internal transfer", notes: cleanNote, transferID: transferID, createdAt: date))
+        modelContext.insert(BudgetTransaction(amount: amount, title: "Transfer from \(from.name)", categoryID: category.id, walletID: to.id, type: .income, status: .received, paymentMethod: "Internal transfer", notes: cleanNote, transferID: transferID, createdAt: date))
         persist(success: "Transfer completed")
     }
 
@@ -553,7 +600,7 @@ final class BudgetifyStore: ObservableObject {
             accountGroups: groups.map { GroupDTO(id: $0.id, label: $0.label, colorHex: $0.colorHex, symbol: $0.symbol, sortOrder: $0.sortOrder) },
             wallets: wallets.map { WalletDTO(id: $0.id, name: $0.name, initialBalance: $0.initialBalance, colorHex: $0.colorHex, symbol: $0.symbol, kind: $0.kind, groupID: $0.groupID, createdAt: $0.createdAt) },
             categories: categories.map { CategoryDTO(id: $0.id, name: $0.name, colorHex: $0.colorHex, symbol: $0.symbol, type: $0.type, createdAt: $0.createdAt) },
-            transactions: transactions.map { TransactionDTO(id: $0.id, amount: $0.amount, title: $0.title, categoryID: $0.categoryID, walletID: $0.walletID, type: $0.type, status: $0.status, paymentMethod: $0.paymentMethod, notes: $0.notes, createdAt: $0.createdAt) },
+            transactions: transactions.map { TransactionDTO(id: $0.id, amount: $0.amount, title: $0.title, categoryID: $0.categoryID, walletID: $0.walletID, type: $0.type, status: $0.status, paymentMethod: $0.paymentMethod, notes: $0.notes, transferID: $0.transferID, createdAt: $0.createdAt) },
             recurringPayments: recurringPayments.map { RecurringDTO(id: $0.id, name: $0.name, amount: $0.amount, dayOfMonth: $0.dayOfMonth, walletID: $0.walletID, categoryID: $0.categoryID, kind: $0.kind, isActive: $0.isActive, createdAt: $0.createdAt) },
             fixedExpenses: fixedExpenses.map { FixedDTO(id: $0.id, name: $0.name, amount: $0.amount, frequency: $0.frequency, walletID: $0.walletID, categoryID: $0.categoryID, isActive: $0.isActive, createdAt: $0.createdAt) }
         )
@@ -600,9 +647,9 @@ final class BudgetifyStore: ObservableObject {
                     item.amount == dto.amount && item.walletID == walletID && item.categoryID == categoryID && item.type == dto.type && item.title.caseInsensitiveCompare(dto.title) == .orderedSame && abs(item.createdAt.timeIntervalSince(dto.createdAt)) < 1
                 }
                 if let existing = transactions.first(where: { $0.id == dto.id }) ?? duplicate {
-                    existing.amount = dto.amount; existing.title = dto.title.isEmpty ? (dto.type == .income ? "Money In" : "Money Out") : dto.title; existing.categoryID = categoryID; existing.walletID = walletID; existing.type = dto.type; existing.status = dto.status; existing.paymentMethod = dto.paymentMethod; existing.notes = dto.notes; existing.createdAt = dto.createdAt
+                    existing.amount = dto.amount; existing.title = dto.title.isEmpty ? (dto.type == .income ? "Money In" : "Money Out") : dto.title; existing.categoryID = categoryID; existing.walletID = walletID; existing.type = dto.type; existing.status = dto.status; existing.paymentMethod = dto.paymentMethod; existing.notes = dto.notes; existing.transferID = dto.transferID; existing.createdAt = dto.createdAt
                 } else {
-                    modelContext.insert(BudgetTransaction(id: dto.id, amount: dto.amount, title: dto.title.isEmpty ? (dto.type == .income ? "Money In" : "Money Out") : dto.title, categoryID: categoryID, walletID: walletID, type: dto.type, status: dto.status, paymentMethod: dto.paymentMethod, notes: dto.notes, createdAt: dto.createdAt))
+                    modelContext.insert(BudgetTransaction(id: dto.id, amount: dto.amount, title: dto.title.isEmpty ? (dto.type == .income ? "Money In" : "Money Out") : dto.title, categoryID: categoryID, walletID: walletID, type: dto.type, status: dto.status, paymentMethod: dto.paymentMethod, notes: dto.notes, transferID: dto.transferID, createdAt: dto.createdAt))
                 }
             }
             for dto in export.recurringPayments where dto.amount > 0 {
@@ -641,10 +688,10 @@ final class BudgetifyStore: ObservableObject {
         guard let payload = undoPayload else { return }
         switch payload {
         case .transaction(let snapshot):
-            modelContext.insert(BudgetTransaction(id: snapshot.id, amount: snapshot.amount, title: snapshot.title, categoryID: snapshot.categoryID, walletID: snapshot.walletID, type: snapshot.type, status: snapshot.status, paymentMethod: snapshot.paymentMethod, notes: snapshot.notes, createdAt: snapshot.createdAt))
+            modelContext.insert(BudgetTransaction(id: snapshot.id, amount: snapshot.amount, title: snapshot.title, categoryID: snapshot.categoryID, walletID: snapshot.walletID, type: snapshot.type, status: snapshot.status, paymentMethod: snapshot.paymentMethod, notes: snapshot.notes, transferID: snapshot.transferID, createdAt: snapshot.createdAt))
         case .transactions(let snapshots):
             for snapshot in snapshots {
-                modelContext.insert(BudgetTransaction(id: snapshot.id, amount: snapshot.amount, title: snapshot.title, categoryID: snapshot.categoryID, walletID: snapshot.walletID, type: snapshot.type, status: snapshot.status, paymentMethod: snapshot.paymentMethod, notes: snapshot.notes, createdAt: snapshot.createdAt))
+                modelContext.insert(BudgetTransaction(id: snapshot.id, amount: snapshot.amount, title: snapshot.title, categoryID: snapshot.categoryID, walletID: snapshot.walletID, type: snapshot.type, status: snapshot.status, paymentMethod: snapshot.paymentMethod, notes: snapshot.notes, transferID: snapshot.transferID, createdAt: snapshot.createdAt))
             }
         case .recurring(let snapshot):
             modelContext.insert(RecurringPayment(id: snapshot.id, name: snapshot.name, amount: snapshot.amount, dayOfMonth: snapshot.dayOfMonth, walletID: snapshot.walletID, categoryID: snapshot.categoryID, kind: snapshot.kind, isActive: snapshot.isActive, createdAt: snapshot.createdAt))

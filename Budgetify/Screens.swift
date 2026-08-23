@@ -1,6 +1,7 @@
 import SwiftUI
 import Foundation
 import UniformTypeIdentifiers
+import UIKit
 
 struct RecurringView: View {
     @EnvironmentObject private var store: BudgetifyStore
@@ -18,20 +19,6 @@ struct RecurringView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    SectionHeading(title: "Plans", subtitle: "Your committed monthly rhythm")
-                    StandardCardSurface(cornerRadius: 22) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "wand.and.stars").foregroundStyle(BudgetifyPalette.purple)
-                                Text("Cash-flow forecast").font(.body.weight(.semibold)).foregroundStyle(BudgetifyPalette.text)
-                                Spacer()
-                                AmountText(amount: store.forecast, color: store.forecast >= 0 ? BudgetifyPalette.green : BudgetifyPalette.red, fontSize: 18)
-                            }
-                            Text("Balance after pending income, EMIs, and subscriptions.").font(.subheadline).foregroundStyle(BudgetifyPalette.secondary)
-                        }
-                        .padding(16)
-                        .background(BudgetifyPalette.purple.opacity(0.08))
-                    }
                     SectionHeading(title: "EMIs", subtitle: "Scheduled commitments", actionTitle: "Add") { showingRecurring = true }
                     if store.recurringPayments.isEmpty {
                         EmptyState(icon: "calendar.badge.clock", title: "Nothing scheduled", message: "Add an EMI to keep future commitments visible.", actionTitle: "Add EMI") { showingRecurring = true }
@@ -90,6 +77,20 @@ struct RecurringView: View {
                         .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
                     }
+                    SectionHeading(title: "Plans", subtitle: "Your committed monthly rhythm")
+                    StandardCardSurface(cornerRadius: 22) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Image(systemName: "wand.and.stars").foregroundStyle(BudgetifyPalette.purple)
+                                Text("Cash-flow forecast").font(.body.weight(.semibold)).foregroundStyle(BudgetifyPalette.text)
+                                Spacer()
+                                AmountText(amount: store.forecast, color: store.forecast >= 0 ? BudgetifyPalette.green : BudgetifyPalette.red, fontSize: 18)
+                            }
+                            Text("Balance after pending income, EMIs, and subscriptions.").font(.subheadline).foregroundStyle(BudgetifyPalette.secondary)
+                        }
+                        .padding(16)
+                        .background(BudgetifyPalette.purple.opacity(0.08))
+                    }
                 }.screenPadding().padding(.top, 12).padding(.bottom, 44)
             }
             .scrollIndicators(.hidden)
@@ -146,15 +147,6 @@ struct WalletsView: View {
                     BalanceCardSurface {
                         HStack { VStack(alignment: .leading, spacing: 5) { Text("Total balance").font(.subheadline.weight(.medium)).foregroundStyle(BudgetifyPalette.heroSecondary); AmountText(amount: store.grandTotal, color: BudgetifyPalette.heroText, fontSize: 29) }; Spacer(); Image(systemName: "wallet.pass.fill").font(.title.weight(.semibold)).foregroundStyle(BudgetifyPalette.heroSecondary) }.padding(18)
                     }
-                    HStack(spacing: 8) {
-                        Button { showingWallet = true } label: { Label("Add a/c", systemImage: "plus") }
-                            .buttonStyle(AccountActionButtonStyle(prominent: true))
-                        Button { showingGroup = true } label: { Label("Add group", systemImage: "folder.badge.plus") }
-                            .buttonStyle(AccountActionButtonStyle(prominent: false))
-                        Button { showingTransfer = true } label: { Label("Transfer", systemImage: "arrow.left.arrow.right") }
-                            .buttonStyle(AccountActionButtonStyle(prominent: false))
-                    }
-                    .frame(maxWidth: .infinity)
                     ForEach(store.groups) { group in
                         let groupWallets = store.wallets.filter { $0.groupID == group.id }
                         VStack(spacing: 0) {
@@ -198,6 +190,22 @@ struct WalletsView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
             .budgetifyNavigationChrome(clearNavigationBar: false)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { showingWallet = true } label: { Label("Add a/c", systemImage: "plus") }
+                        Button { showingGroup = true } label: { Label("Add group", systemImage: "folder.badge.plus") }
+                        Button { showingTransfer = true } label: { Label("Transfer", systemImage: "arrow.left.arrow.right") }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(BudgetifyPalette.teal)
+                            .frame(minHeight: 44)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Add account, group, or transfer")
+                }
+            }
         }
         .sheet(isPresented: $showingGroup) { AccountGroupEditor().presentationDetents([.large]).presentationDragIndicator(.visible) }
         .sheet(item: $groupToEdit) { AccountGroupEditor(group: $0).presentationDetents([.large]).presentationDragIndicator(.visible) }
@@ -220,7 +228,6 @@ struct SettingsView: View {
     @EnvironmentObject private var store: BudgetifyStore
     @EnvironmentObject private var settings: AppSettings
     @State private var showingImporter = false
-    @State private var showingResetConfirmation = false
     @State private var showingCategories = false
     @State private var showingRecurring = false
     @State private var showingDeleteAllConfirmation = false
@@ -261,26 +268,13 @@ struct SettingsView: View {
                             Text("First matching category").tag(UUID?.none)
                             ForEach(store.categories.filter { $0.type == (settings.defaultTransactionType == .income ? .income : .expense) }) { Text($0.name).tag(Optional($0.id)) }
                         }
-                    }
-
-                    settingsSection(title: "First day of week", icon: "calendar") {
-                        Picker("First day of week", selection: $settings.firstWeekday) {
-                            ForEach(1...7, id: \.self) { Text(weekdayNames[$0 - 1]).tag($0) }
+                        Toggle("Show notes by default", isOn: $settings.showNotesByDefault)
+                            .tint(BudgetifyPalette.accent)
+                        Toggle("Show payment method by default", isOn: $settings.showPaymentMethodByDefault)
+                            .tint(BudgetifyPalette.accent)
+                        Picker("Transaction row density", selection: $settings.rowDensity) {
+                            ForEach(RowDensity.allCases) { Text($0.title).tag($0) }
                         }
-                    }
-
-                    settingsSection(title: "Interaction", icon: "hand.draw") {
-                        Toggle("Press-and-hold actions", isOn: $settings.holdActionsEnabled)
-                            .tint(BudgetifyPalette.accent)
-                        Text("Press and hold rows for quick edit, enable, and delete actions.")
-                            .font(.footnote)
-                            .foregroundStyle(BudgetifyPalette.secondary)
-                        Toggle("Confirm before deleting", isOn: $settings.deleteConfirmationEnabled)
-                            .tint(BudgetifyPalette.accent)
-                        Toggle("Show undo after deletion", isOn: $settings.undoAfterDeletionEnabled)
-                            .tint(BudgetifyPalette.accent)
-                        Toggle("Reduce motion", isOn: $settings.reduceMotionEnabled)
-                            .tint(BudgetifyPalette.accent)
                     }
 
                     settingsSection(title: "Dashboard", icon: "rectangle.grid.2x2") {
@@ -333,6 +327,37 @@ struct SettingsView: View {
                     }
 
                     settingsSection(title: "Advanced", icon: "slider.horizontal.3") {
+                        Text("Personalize the way Wallet looks and behaves.")
+                            .font(.subheadline)
+                            .foregroundStyle(BudgetifyPalette.secondary)
+                        Picker("Accent color", selection: $settings.accentPreset) {
+                            ForEach(AccentPreset.allCases) { preset in
+                                Text(preset.title).tag(preset)
+                            }
+                        }
+                        .tint(settings.accentPreset.color)
+                        Picker("First day of week", selection: $settings.firstWeekday) {
+                            ForEach(1...7, id: \.self) { Text(weekdayNames[$0 - 1]).tag($0) }
+                        }
+                        Toggle("Press-and-hold actions", isOn: $settings.holdActionsEnabled)
+                            .tint(settings.accentPreset.color)
+                        Toggle("Confirm before deleting", isOn: $settings.deleteConfirmationEnabled)
+                            .tint(settings.accentPreset.color)
+                        Toggle("Show undo after deletion", isOn: $settings.undoAfterDeletionEnabled)
+                            .tint(settings.accentPreset.color)
+                        if settings.undoAfterDeletionEnabled {
+                            HStack {
+                                Text("Undo duration")
+                                Spacer()
+                                Text("\(Int(settings.undoDuration)) sec")
+                                    .foregroundStyle(BudgetifyPalette.secondary)
+                            }
+                            Slider(value: $settings.undoDuration, in: 2...10, step: 1)
+                                .tint(settings.accentPreset.color)
+                        }
+                        Toggle("Reduce motion", isOn: $settings.reduceMotionEnabled)
+                            .tint(settings.accentPreset.color)
+                        Divider().overlay(BudgetifyPalette.divider)
                         Text("Customize the fields used by the Add shortcut.")
                             .font(.subheadline)
                             .foregroundStyle(BudgetifyPalette.secondary)
@@ -341,13 +366,9 @@ struct SettingsView: View {
                             Text("Receiving").tag(TransactionType.income)
                         }
                         Toggle("Offer category in shortcut", isOn: $settings.shortcutIncludesCategory)
-                            .tint(BudgetifyPalette.accent)
+                            .tint(settings.accentPreset.color)
                         Toggle("Offer note in shortcut", isOn: $settings.shortcutIncludesNote)
-                            .tint(BudgetifyPalette.accent)
-                        Divider().overlay(BudgetifyPalette.divider)
-                        Text("Customize shortcut fields used by the Add button.")
-                            .font(.subheadline)
-                            .foregroundStyle(BudgetifyPalette.secondary)
+                            .tint(settings.accentPreset.color)
                     }
 
                     settingsSection(title: "Notifications", icon: "bell.badge") {
@@ -425,8 +446,6 @@ struct SettingsView: View {
                         Text("Wallet works offline and stores records locally on this device.")
                             .font(.subheadline)
                             .foregroundStyle(BudgetifyPalette.secondary)
-                        Button(role: .destructive) { showingResetConfirmation = true } label: { Label("Reset demo data", systemImage: "arrow.counterclockwise") }
-                            .buttonStyle(StandardButtonStyle())
                         Button(role: .destructive) { showingDeleteAllConfirmation = true } label: { Label("Delete all data", systemImage: "trash") }
                             .buttonStyle(StandardButtonStyle())
                     }
@@ -461,10 +480,6 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showingCategories) { CategoryManagementView() }
         .sheet(isPresented: $showingRecurring) { RecurringView() }
-        .alert("Reset demo data?", isPresented: $showingResetConfirmation) {
-            Button("Reset everything", role: .destructive) { store.resetDemoData() }
-            Button("Cancel", role: .cancel) { }
-        } message: { Text("This removes locally stored records and restores the starter categories and wallet. Export a backup first if you may need the current data.") }
         .alert("Delete all data?", isPresented: $showingDeleteAllConfirmation) {
             Button("Delete all data", role: .destructive) { store.deleteAllDataPermanently() }
             Button("Cancel", role: .cancel) { }
@@ -531,6 +546,7 @@ struct CategoryManagementView: View {
     @EnvironmentObject private var store: BudgetifyStore
     @Environment(\.dismiss) private var dismiss
     @State private var newName = ""
+    @State private var newSymbol = "tag.fill"
     @State private var selectedType: CategoryType = .expense
     @State private var editingCategory: BudgetCategory?
     @State private var categoryToDelete: BudgetCategory?
@@ -541,15 +557,16 @@ struct CategoryManagementView: View {
             List {
                 Section("Add category") {
                     TextField("Category name", text: $newName)
+                    TextField("SF Symbol or emoji", text: $newSymbol)
                     Picker("Type", selection: $selectedType) { ForEach(CategoryType.allCases) { Text($0.title).tag($0) } }
-                    Button { store.addCategory(name: newName, type: selectedType); newName = "" } label: { Label("Create category", systemImage: "plus") }
+                    Button { store.addCategory(name: newName, type: selectedType, symbol: newSymbol); newName = ""; newSymbol = "tag.fill" } label: { Label("Create category", systemImage: "plus") }
                         .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
                 Section("Your categories") {
                     ForEach(store.categories) { category in
                         Button { editingCategory = category } label: {
                             HStack(spacing: 12) {
-                                Image(systemName: category.symbol).foregroundStyle(Color(hex: category.colorHex)).frame(width: 32, height: 32).background(Color(hex: category.colorHex).opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                CategorySymbolView(symbol: category.symbol, color: Color(hex: category.colorHex))
                                 Text(category.name).foregroundStyle(BudgetifyPalette.text)
                                 Spacer()
                                 Text(category.type.title).font(.caption.weight(.semibold)).foregroundStyle(BudgetifyPalette.muted)
@@ -559,12 +576,6 @@ struct CategoryManagementView: View {
                         .buttonStyle(.plain)
 
                     }
-                }
-                Section("Add category") {
-                    TextField("Category name", text: $newName)
-                    Picker("Type", selection: $selectedType) { ForEach(CategoryType.allCases) { Text($0.title).tag($0) } }
-                    Button { store.addCategory(name: newName, type: selectedType); newName = "" } label: { Label("Create category", systemImage: "plus") }
-                        .disabled(newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -582,17 +593,41 @@ struct CategoryManagementView: View {
     }
 }
 
+private struct CategorySymbolView: View {
+    let symbol: String
+    let color: Color
+
+    var body: some View {
+        Group {
+            if UIImage(systemName: symbol) != nil {
+                Image(systemName: symbol)
+                    .font(.body.weight(.semibold))
+            } else {
+                Text(symbol.isEmpty ? "tag.fill" : symbol)
+                    .font(.body.weight(.semibold))
+                    .minimumScaleFactor(0.65)
+            }
+        }
+        .foregroundStyle(color)
+        .frame(width: 32, height: 32)
+        .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .accessibilityLabel("Category icon")
+    }
+}
+
 private struct CategoryEditSheet: View {
     @EnvironmentObject private var store: BudgetifyStore
     @Environment(\.dismiss) private var dismiss
     let category: BudgetCategory
     @State private var name: String
     @State private var type: CategoryType
+    @State private var symbol: String
 
     init(category: BudgetCategory) {
         self.category = category
         _name = State(initialValue: category.name)
         _type = State(initialValue: category.type)
+        _symbol = State(initialValue: category.symbol)
     }
 
     var body: some View {
@@ -600,6 +635,7 @@ private struct CategoryEditSheet: View {
             Form {
                 Section("Category") {
                     TextField("Name", text: $name)
+                    TextField("SF Symbol or emoji", text: $symbol)
                     Picker("Type", selection: $type) { ForEach(CategoryType.allCases) { Text($0.title).tag($0) } }
                 }
             }
@@ -607,7 +643,7 @@ private struct CategoryEditSheet: View {
             .navigationTitle("Edit category")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { store.updateCategory(category, name: name, type: type); dismiss() }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+                ToolbarItem(placement: .confirmationAction) { Button("Save") { store.updateCategory(category, name: name, type: type, symbol: symbol); dismiss() }.disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
             }
         }
         .presentationBackground(BudgetifyPalette.canvas)

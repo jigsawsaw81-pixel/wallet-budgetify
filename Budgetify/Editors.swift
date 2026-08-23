@@ -157,6 +157,13 @@ struct CalculatorPad: View {
     var body: some View {
         StandardCardSurface(cornerRadius: 20) {
             VStack(spacing: 8) {
+                if !expression.isEmpty {
+                    Text(expression)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(BudgetifyPalette.secondary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .lineLimit(1)
+                }
                 ForEach(keys, id: \.self) { row in
                     HStack(spacing: 8) {
                         ForEach(row, id: \.self) { key in
@@ -171,22 +178,90 @@ struct CalculatorPad: View {
             .padding(14)
         }
         .padding(.top, 4)
+        .onAppear {
+            if expression.isEmpty { expression = value.filter { $0.isNumber || $0 == "." } }
+        }
     }
 
     private func press(_ key: String) {
-        if key == "⌫" { expression = String(expression.dropLast()) }
-        else if key == "=" { value = evaluate(expression) }
-        else { expression.append(key); if !["÷", "×", "−"].contains(key) { value = expression } }
+        switch key {
+        case "⌫":
+            expression = String(expression.dropLast())
+            value = expression
+        case "=":
+            guard let result = evaluate(expression) else { return }
+            expression = result
+            value = result
+        case "÷", "×", "−":
+            guard !expression.isEmpty, !lastCharacterIsOperator else { return }
+            expression.append(key)
+        case ".":
+            let currentNumber = expression.split(whereSeparator: { "÷×−+".contains($0) }).last.map(String.init) ?? ""
+            guard !currentNumber.contains(".") else { return }
+            expression.append(key)
+            value = expression
+        default:
+            expression.append(key)
+            value = expression
+        }
     }
 
-    private func evaluate(_ input: String) -> String {
-        let normalized = input.replacingOccurrences(of: "×", with: "*").replacingOccurrences(of: "÷", with: "/").replacingOccurrences(of: "−", with: "-")
-        guard normalized.allSatisfy({ "0123456789.+-*/() ".contains($0) }) else { return value }
-        let parts = normalized.split(separator: "+", omittingEmptySubsequences: true)
-        let numbers = parts.compactMap { try? MoneyParser.parse(String($0), allowsZero: true).get() }
-        if parts.count > 1, numbers.count == parts.count { return numbers.reduce(Decimal(0), +).description }
-        return value
+    private var lastCharacterIsOperator: Bool {
+        guard let last = expression.last else { return false }
+        return "÷×−+".contains(last)
     }
+
+    private func evaluate(_ input: String) -> String? {
+        let normalized = input.replacingOccurrences(of: "×", with: "*").replacingOccurrences(of: "÷", with: "/").replacingOccurrences(of: "−", with: "-")
+        guard !normalized.isEmpty, normalized.allSatisfy({ "0123456789.+-*/ ".contains($0) }) else { return nil }
+        var values = [Decimal]()
+        var operators = [Character]()
+        var number = ""
+
+        func precedence(_ op: Character) -> Int { (op == "*" || op == "/") ? 2 : 1 }
+        func applyTop() -> Bool {
+            guard let op = operators.popLast(), let rhs = values.popLast(), let lhs = values.popLast() else { return false }
+            switch op {
+            case "+": values.append(lhs + rhs)
+            case "-": values.append(lhs - rhs)
+            case "*": values.append(lhs * rhs)
+            case "/":
+                guard rhs != 0 else { return false }
+                values.append(lhs / rhs)
+            default: return false
+            }
+            return true
+        }
+
+        for character in normalized {
+            if character.isNumber || character == "." {
+                number.append(character)
+            } else if character == " " {
+                continue
+            } else if "+-*/".contains(character) {
+                guard let decimal = Decimal(string: number, locale: Locale(identifier: "en_US_POSIX")), !number.isEmpty else { return nil }
+                values.append(decimal)
+                number = ""
+                while let previous = operators.last, precedence(previous) >= precedence(character) {
+                    guard applyTop() else { return nil }
+                }
+                operators.append(character)
+            } else {
+                return nil
+            }
+        }
+        guard let decimal = Decimal(string: number, locale: Locale(identifier: "en_US_POSIX")), !number.isEmpty else { return nil }
+        values.append(decimal)
+        while !operators.isEmpty {
+            guard applyTop() else { return nil }
+        }
+        guard let result = values.single else { return nil }
+        return MoneyFormatter.string(result, showCurrency: false)
+    }
+}
+
+private extension Array where Element == Decimal {
+    var single: Decimal? { count == 1 ? first : nil }
 }
 
 struct AccountGroupEditor: View {
@@ -285,10 +360,22 @@ struct TransferEditor: View {
     @EnvironmentObject private var store: BudgetifyStore
     @EnvironmentObject private var settings: AppSettings
     @Environment(\.dismiss) private var dismiss
+    let transaction: BudgetTransaction?
     @State private var fromID: UUID?
     @State private var toID: UUID?
     @State private var amount = ""
+    @State private var note = ""
+    @State private var date = Date()
     @State private var message: String?
+
+    init(transaction: BudgetTransaction? = nil) {
+        self.transaction = transaction
+        _amount = State(initialValue: transaction.map { MoneyFormatter.string($0.amount, showCurrency: false) } ?? "")
+        _note = State(initialValue: transaction?.notes ?? "")
+        _date = State(initialValue: transaction?.createdAt ?? .now)
+        _fromID = State(initialValue: transaction?.type == .expense ? transaction?.walletID : nil)
+        _toID = State(initialValue: transaction?.type == .income ? transaction?.walletID : nil)
+    }
 
     var body: some View {
         NavigationStack {
@@ -297,16 +384,28 @@ struct TransferEditor: View {
                     Picker("From", selection: $fromID) { ForEach(store.wallets) { Text($0.name).tag(Optional($0.id)) } }
                     Picker("To", selection: $toID) { ForEach(store.wallets) { Text($0.name).tag(Optional($0.id)) } }
                     MoneyInputField(text: $amount, title: "Amount")
+                    TextField("Note (optional)", text: $note, axis: .vertical)
+                        .lineLimit(2...4)
+                    DatePicker("Date", selection: $date, displayedComponents: [.date, .hourAndMinute])
                     if let message { Text(message).font(.footnote).foregroundStyle(BudgetifyPalette.red) }
                 }
             }
             .budgetifyFormChrome()
-            .navigationTitle("Transfer")
+            .navigationTitle(transaction == nil ? "Transfer" : "Edit transfer")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Transfer") { save() }.disabled(!canSave).fontWeight(.bold) }
+                ToolbarItem(placement: .confirmationAction) { Button(transaction == nil ? "Transfer" : "Update") { save() }.disabled(!canSave).fontWeight(.bold) }
             }
-            .onAppear { fromID = fromID ?? store.wallets.first?.id; toID = toID ?? store.wallets.dropFirst().first?.id }
+            .onAppear {
+                if let transaction {
+                    let entries = store.transferEntries(for: transaction)
+                    fromID = entries.first(where: { $0.type == .expense })?.walletID
+                    toID = entries.first(where: { $0.type == .income })?.walletID
+                } else {
+                    fromID = fromID ?? store.wallets.first?.id
+                    toID = toID ?? store.wallets.dropFirst().first?.id
+                }
+            }
         }
         .presentationBackground(BudgetifyPalette.canvas)
         .presentationDetents([.large])
@@ -319,7 +418,11 @@ struct TransferEditor: View {
     private func save() {
         guard canSave, let from = store.wallets.first(where: { $0.id == fromID }), let to = store.wallets.first(where: { $0.id == toID }), let parsedAmount else { message = "Choose two different wallets and enter a positive amount."; return }
 
-        store.transfer(from: from, to: to, amount: parsedAmount)
+        if let transaction {
+            store.updateTransfer(transaction, from: from, to: to, amount: parsedAmount, date: date, note: note)
+        } else {
+            store.transfer(from: from, to: to, amount: parsedAmount, date: date, note: note)
+        }
         dismiss()
     }
 }

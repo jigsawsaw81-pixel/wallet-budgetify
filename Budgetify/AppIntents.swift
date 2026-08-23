@@ -226,6 +226,18 @@ struct BudgetifyCategoryOptionsProvider: DynamicOptionsProvider {
     }
 }
 
+struct BudgetifyGroupedWalletOptionsProvider: DynamicOptionsProvider {
+    @IntentParameterDependency<RecordTransactionByGroupIntent>(\.$group) var intent
+
+    func results() async throws -> [BudgetifyWalletEntity] {
+        try await MainActor.run {
+            let store = try BudgetifyIntentSupport.makeStore()
+            guard let groupID = intent?.group.id, let uuid = UUID(uuidString: groupID) else { return [] }
+            return store.wallets.filter { $0.groupID == uuid }.map { BudgetifyWalletEntity(wallet: $0, groupName: store.group(for: $0)?.label ?? "Account", balance: store.balance(for: $0)) }
+        }
+    }
+}
+
 struct BudgetifyDebitCategoryOptionsProvider: DynamicOptionsProvider {
     func results() async throws -> [BudgetifyCategoryEntity] {
         try await MainActor.run {
@@ -280,6 +292,35 @@ struct RecordTransactionIntent: AppIntent {
             let chosenNote = appSettings.shortcutIncludesNote ? selectedNote : ""
             try store.addTransactionFromShortcut(amount: value, title: nil, categoryID: targetCategory?.id, walletID: targetWallet.id, type: selectedKind.transactionType, notes: chosenNote.isEmpty ? nil : chosenNote, date: now)
             return BudgetifyIntentSupport.confirmation(type: selectedKind, amount: value, wallet: targetWallet, category: targetCategory, date: now, note: chosenNote)
+        }
+        return .result(dialog: IntentDialog(stringLiteral: dialog))
+    }
+}
+
+struct RecordTransactionByGroupIntent: AppIntent {
+    static var title: LocalizedStringResource = "Record by account group"
+    static var description = IntentDescription("Record Money In or Money Out by choosing the entry type, amount, account group, and a/c.")
+    static var openAppWhenRun = false
+
+    @Parameter(title: "Paying or Receiving") var kind: BudgetifyEntryKind
+    @Parameter(title: "Amount") var amount: Double
+    @Parameter(title: "Account group") var group: BudgetifyGroupEntity
+    @Parameter(title: "a/c", optionsProvider: BudgetifyGroupedWalletOptionsProvider()) var wallet: BudgetifyWalletEntity
+
+    func perform() async throws -> some IntentResult {
+        let selectedKind = kind
+        let selectedAmount = amount
+        let selectedGroup = group
+        let selectedWallet = wallet
+        let now = Date()
+        let dialog = try await MainActor.run {
+            let store = try BudgetifyIntentSupport.makeStore()
+            let value = try BudgetifyIntentSupport.decimalAmount(selectedAmount)
+            let targetGroup = try BudgetifyIntentSupport.group(selectedGroup, in: store)
+            let targetWallet = try BudgetifyIntentSupport.wallet(selectedWallet, in: store)
+            try BudgetifyIntentSupport.validate(wallet: targetWallet, group: targetGroup, in: store)
+            try store.addTransactionFromShortcut(amount: value, title: nil, categoryID: nil, walletID: targetWallet.id, type: selectedKind.transactionType, notes: nil, date: now)
+            return "\(selectedKind.title) recorded: \(MoneyFormatter.string(value)) in \(targetWallet.name), \(targetGroup.label)."
         }
         return .result(dialog: IntentDialog(stringLiteral: dialog))
     }
@@ -455,6 +496,7 @@ struct OpenBudgetifyAddTransactionIntent: AppIntent {
 struct BudgetifyShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(intent: RecordTransactionIntent(), phrases: ["Log a transaction in \(.applicationName)", "Record an expense in \(.applicationName)", "Record income in \(.applicationName)"], shortTitle: "Record transaction", systemImageName: "plus.circle")
+        AppShortcut(intent: RecordTransactionByGroupIntent(), phrases: ["Record by group in \(.applicationName)"], shortTitle: "Record by group", systemImageName: "rectangle.3.group")
         AppShortcut(intent: ShowTotalBalanceIntent(), phrases: ["Show total balance in \(.applicationName)"], shortTitle: "Total balance", systemImageName: "sum")
         AppShortcut(intent: ShowWalletBalanceIntent(), phrases: ["Show wallet balance in \(.applicationName)"], shortTitle: "Wallet balance", systemImageName: "wallet.pass")
         AppShortcut(intent: ShowTodaySpendingIntent(), phrases: ["Show today’s spending in \(.applicationName)"], shortTitle: "Today’s spending", systemImageName: "calendar")

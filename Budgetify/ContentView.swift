@@ -8,6 +8,7 @@ enum BudgetEntryRoute: String, Identifiable {
     case recurring
     case fixed
     case transaction
+    case transfer
 
     var id: String { rawValue }
 }
@@ -17,7 +18,6 @@ struct ContentView: View {
     @EnvironmentObject private var settings: AppSettings
     @Environment(\.scenePhase) private var scenePhase
     @State private var tab = 0
-    @State private var showingAddActions = false
     @State private var entryRoute: BudgetEntryRoute?
     @State private var selectedTransaction: BudgetTransaction?
     @State private var lastNonQuickTab = 0
@@ -94,20 +94,13 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             AmbientBackground()
-            BudgetifyTabView(tab: $tab, tabsForRendering: tabsForRendering, showingAddActions: $showingAddActions, onEdit: editTransaction)
+            BudgetifyTabView(tab: $tab, tabsForRendering: tabsForRendering, onEdit: editTransaction, open: open)
                 .onChange(of: visibleTabs) { _, tabs in
                     handleTabsChange(tabs: tabs)
                 }
                 .onChange(of: tab) { _, newTab in
                     handleTabSelection(newTab: newTab)
                 }
-        }
-        .confirmationDialog("Add entry", isPresented: $showingAddActions, titleVisibility: .visible) {
-            Button("Money In", systemImage: "arrow.down.left") { open(.credit) }
-            Button("Money Out", systemImage: "arrow.up.right") { open(.debit) }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Choose the type of money movement or commitment to add.")
         }
         .sheet(item: $entryRoute) { route in
             entryView(route)
@@ -187,7 +180,7 @@ struct ContentView: View {
 
     private func editTransaction(_ transaction: BudgetTransaction) {
         selectedTransaction = transaction
-        entryRoute = .transaction
+        entryRoute = transaction.isTransfer ? .transfer : .transaction
     }
 
     private func handleTabsChange(tabs: [NavbarTab]) {
@@ -214,6 +207,7 @@ struct ContentView: View {
         case .credit: TransactionEditor(transaction: nil, defaultType: .income)
         case .debit: TransactionEditor(transaction: nil, defaultType: .expense)
         case .transaction: TransactionEditor(transaction: selectedTransaction, defaultType: selectedTransaction?.type ?? settings.defaultTransactionType)
+        case .transfer: TransferEditor(transaction: selectedTransaction)
         case .recurring: RecurringEditor()
         case .fixed: FixedExpenseEditor()
         }
@@ -223,13 +217,13 @@ struct ContentView: View {
 struct BudgetifyTabView: View {
     @Binding var tab: Int
     let tabsForRendering: [NavbarTab]
-    @Binding var showingAddActions: Bool
     let onEdit: (BudgetTransaction) -> Void
+    let open: (BudgetEntryRoute) -> Void
 
     var body: some View {
         TabView(selection: $tab) {
             ForEach(Array(tabsForRendering.enumerated()), id: \.offset) { index, item in
-                BudgetifyTabContent(tabItem: item, showingAddActions: $showingAddActions, onEdit: onEdit)
+                BudgetifyTabContent(tabItem: item, onEdit: onEdit, open: open)
                     .tabItem {
                         Label(item.title, systemImage: item.systemImage)
                     }
@@ -246,15 +240,15 @@ struct BudgetifyTabView: View {
 
 struct BudgetifyTabContent: View {
     let tabItem: NavbarTab
-    @Binding var showingAddActions: Bool
     let onEdit: (BudgetTransaction) -> Void
+    let open: (BudgetEntryRoute) -> Void
 
     @ViewBuilder
     var body: some View {
         if tabItem == .home {
-            HomeView(showingAddActions: $showingAddActions, onEdit: onEdit)
+            HomeView(onEdit: onEdit, open: open)
         } else if tabItem == .transactions {
-            TransactionsView(showingAddActions: $showingAddActions, onEdit: onEdit)
+            TransactionsView(onEdit: onEdit, open: open)
         } else if tabItem == .accounts {
             WalletsView()
         } else if tabItem == .quickEntry {
@@ -270,8 +264,9 @@ struct BudgetifyTabContent: View {
 struct HomeView: View {
     @EnvironmentObject private var store: BudgetifyStore
     @EnvironmentObject private var settings: AppSettings
-    @Binding var showingAddActions: Bool
     let onEdit: (BudgetTransaction) -> Void
+    let open: (BudgetEntryRoute) -> Void
+    @State private var showingTransfer = false
     @State private var heroMode = 0
     @State private var transactionToDelete: BudgetTransaction?
     @State private var showingDeleteConfirmation = false
@@ -333,7 +328,7 @@ struct HomeView: View {
                     if settings.showRecentActivity {
                         SectionHeading(title: "Latest activity", subtitle: "Your newest records")
                         if store.transactions.isEmpty {
-                            EmptyState(icon: "tray", title: "No transactions yet", message: "Add your first debit or credit to start seeing your financial rhythm.", actionTitle: "Add entry") { showingAddActions = true }
+                            EmptyState(icon: "tray", title: "No transactions yet", message: "Add your first debit or credit to start seeing your financial rhythm.", actionTitle: "Add entry") { open(.debit) }
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(Array(store.transactions.prefix(5))) { transaction in
@@ -368,15 +363,24 @@ struct HomeView: View {
             .budgetifyNavigationChrome(clearNavigationBar: false)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showingAddActions = true } label: { 
+                    Menu {
+                        Button { open(.credit) } label: { Label("Money In", systemImage: "arrow.down.left") }
+                        Button { open(.debit) } label: { Label("Money Out", systemImage: "arrow.up.right") }
+                        Button { showingTransfer = true } label: { Label("Transfer", systemImage: "arrow.left.arrow.right") }
+                    } label: {
                         Image(systemName: "plus")
-                            .font(.body.weight(.semibold))
-                            .frame(width: 32, height: 32)
-                            .background(BudgetifyPalette.surface, in: Circle())
-                            .shadow(color: BudgetifyPalette.cardShadow, radius: 8, y: 2)
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(BudgetifyPalette.teal)
+                            .frame(minHeight: 44)
                     }
+                    .buttonStyle(.borderless)
                     .accessibilityLabel("Add budget entry")
                 }
+            }
+            .sheet(isPresented: $showingTransfer) {
+                TransferEditor()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
             .alert("Delete transaction?", isPresented: $showingDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
@@ -402,28 +406,47 @@ struct HeroBalanceCard: View {
     private var label: String { mode == 0 ? "Mine · Bank only" : "Mine · Cash on hand" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Picker("Balance view", selection: $mode) {
-                Text("Bank").tag(0)
-                Text("Cash").tag(1)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(label.uppercased())
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.1)
+                        .foregroundStyle(BudgetifyPalette.heroSecondary)
+                    AmountText(amount: amount, color: BudgetifyPalette.heroText, fontSize: 34)
+                }
+                Spacer(minLength: 8)
+                Picker("Balance view", selection: $mode) {
+                    Text("Bank").tag(0)
+                    Text("Cash").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 118)
+                .tint(BudgetifyPalette.heroSecondary)
+                .colorScheme(.dark)
             }
-            .pickerStyle(.segmented)
-            .tint(BudgetifyPalette.heroSecondary)
-            .colorScheme(.dark)
-            Text(label.uppercased()).font(.caption2.weight(.bold)).tracking(1.1).foregroundStyle(BudgetifyPalette.heroSecondary)
-            AmountText(amount: amount, color: BudgetifyPalette.heroText, fontSize: 38)
-            VStack(spacing: 0) {
+            HStack(spacing: 0) {
                 balanceLine(title: "Mine cash", amount: store.mineCashBalance)
-                Rectangle().fill(BudgetifyPalette.heroDivider).frame(height: 1)
+                Rectangle()
+                    .fill(BudgetifyPalette.heroDivider)
+                    .frame(width: 1, height: 28)
+                    .padding(.horizontal, 10)
                 balanceLine(title: "Mine total", amount: store.mineTotalBalance, bold: true)
             }
-            .padding(12)
-            .background(BudgetifyPalette.heroInset, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .padding(.horizontal, 11)
+            .padding(.vertical, 9)
+            .background(BudgetifyPalette.heroInset, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
-        .padding(20)
-        .background(LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing))
-        .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .shadow(color: BudgetifyPalette.cardShadow, radius: 24, y: 12)
+        .padding(18)
+        .background(
+            ZStack {
+                LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [settings.accentPreset.color.opacity(0.26), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+            },
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(settings.accentPreset.color.opacity(0.32), lineWidth: 1))
+        .shadow(color: BudgetifyPalette.cardShadow, radius: 18, y: 9)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Net worth balance")
     }
@@ -440,8 +463,9 @@ struct HeroBalanceCard: View {
 struct TransactionsView: View {
     @EnvironmentObject private var store: BudgetifyStore
     @EnvironmentObject private var settings: AppSettings
-    @Binding var showingAddActions: Bool
     let onEdit: (BudgetTransaction) -> Void
+    let open: (BudgetEntryRoute) -> Void
+    @State private var showingTransfer = false
     @State private var isSelecting = false
     @State private var selectedIDs = Set<UUID>()
     @State private var transactionToDelete: BudgetTransaction?
@@ -451,18 +475,32 @@ struct TransactionsView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    SectionHeading(title: "Transactions", subtitle: "Net \(MoneyFormatter.string(store.monthNet)) this month", actionTitle: "Add") { showingAddActions = true }
+                    SectionHeading(title: "Transactions", subtitle: "Net \(MoneyFormatter.string(store.monthNet)) this month", actionTitle: isSelecting ? "Done" : "Add") {
+                        if isSelecting {
+                            isSelecting = false
+                            selectedIDs.removeAll()
+                        } else {
+                            open(.debit)
+                        }
+                    }
                     Picker("Transaction type", selection: $store.transactionFilter) {
                         ForEach(TransactionFilter.allCases) { Text($0.title).tag($0) }
-                    }.pickerStyle(.segmented)
-                    HStack(spacing: 10) {
-                        Image(systemName: "magnifyingglass").foregroundStyle(BudgetifyPalette.muted)
-                        TextField("Search transactions", text: $store.query)
-                            .textInputAutocapitalization(.never)
-                            .foregroundStyle(BudgetifyPalette.text)
                     }
-                    .padding(.horizontal, 14).frame(minHeight: 48)
-                    .background(BudgetifyPalette.elevated, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .pickerStyle(.segmented)
+                    StandardCardSurface(cornerRadius: 18) {
+                        HStack(spacing: 12) {
+                            Label("Visible", systemImage: "list.number")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(BudgetifyPalette.secondary)
+                            Spacer()
+                            Text("\(store.filteredTransactions.count)")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(BudgetifyPalette.text)
+                            Divider().frame(height: 24)
+                            AmountText(amount: store.monthNet, color: store.monthNet >= 0 ? BudgetifyPalette.green : BudgetifyPalette.red, fontSize: 15)
+                        }
+                        .padding(14)
+                    }
                     HStack(spacing: 8) {
                         ForEach(DateFilter.allCases) { filter in
                             Button(filter.title) { store.dateFilter = filter }
@@ -471,7 +509,7 @@ struct TransactionsView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     if store.filteredTransactions.isEmpty {
-                        EmptyState(icon: "line.3.horizontal.decrease.circle", title: "No transactions match", message: "Try changing your filters or add a new record.", actionTitle: "Add entry") { showingAddActions = true }
+                        EmptyState(icon: "line.3.horizontal.decrease.circle", title: "No transactions match", message: "Try changing your filters or add a new record.", actionTitle: "Add entry") { open(.debit) }
                     } else {
                         ForEach(TransactionGroup.allCases, id: \.self) { group in
                             let items = store.transactions(for: group)
@@ -518,7 +556,6 @@ struct TransactionsView: View {
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.interactively)
-            .searchable(text: $store.query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: "Search transactions")
             .navigationBarTitleDisplayMode(.inline)
             .budgetifyNavigationChrome(clearNavigationBar: false)
             .toolbar {
@@ -527,13 +564,24 @@ struct TransactionsView: View {
                         Button("Delete", role: .destructive) { showingDeleteConfirmation = true }
                             .accessibilityLabel("Delete selected transactions")
                     }
-                    Button(isSelecting ? "Done" : "Select") {
-
-                        isSelecting.toggle()
-                        if !isSelecting { selectedIDs.removeAll() }
+                    Menu {
+                        Button { open(.credit) } label: { Label("Money In", systemImage: "arrow.down.left") }
+                        Button { open(.debit) } label: { Label("Money Out", systemImage: "arrow.up.right") }
+                        Button { showingTransfer = true } label: { Label("Transfer", systemImage: "arrow.left.arrow.right") }
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundStyle(BudgetifyPalette.teal)
+                            .frame(minHeight: 44)
                     }
-                    .accessibilityLabel(isSelecting ? "Finish selecting transactions" : "Select transactions")
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Add transaction")
                 }
+            }
+            .sheet(isPresented: $showingTransfer) {
+                TransferEditor()
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
             }
         }
         .alert("Delete transactions?", isPresented: $showingDeleteConfirmation) {
@@ -572,11 +620,13 @@ struct TransactionRow: View {
     var body: some View {
         HStack(spacing: 12) {
             let category = store.category(for: transaction)
-            Image(systemName: category?.symbol ?? "circle.fill")
+            let icon = transaction.isTransfer ? "arrow.left.arrow.right" : (category?.symbol ?? "circle.fill")
+            let color = transaction.isTransfer ? BudgetifyPalette.accent : Color(hex: category?.colorHex ?? "7BAABB")
+            Image(systemName: icon)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(Color(hex: category?.colorHex ?? "7BAABB"))
+                .foregroundStyle(color)
                 .frame(width: 40, height: 40)
-                .background(Color(hex: category?.colorHex ?? "7BAABB").opacity(0.13), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .background(color.opacity(0.13), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(transaction.title)
                     .font(.body.weight(.semibold))
@@ -611,6 +661,7 @@ struct TransactionRow: View {
     }
 
     private var amountColor: Color {
+        if transaction.isTransfer { return BudgetifyPalette.accent }
         if transaction.type == .expense { return BudgetifyPalette.red }
         return transaction.status == .pending ? BudgetifyPalette.amber : BudgetifyPalette.green
     }
@@ -620,7 +671,8 @@ struct TransactionRow: View {
         let walletName = wallet?.name ?? "Unknown wallet"
         let groupText = wallet.flatMap(store.group(for:)).map { " · \($0.label)" } ?? ""
         let timeText = transaction.createdAt.formatted(date: .omitted, time: .shortened)
-        return "\(walletName)\(groupText) · \(timeText)"
+        let transferText = transaction.isTransfer ? "Transfer · " : ""
+        return "\(transferText)\(walletName)\(groupText) · \(timeText)"
     }
 }
 

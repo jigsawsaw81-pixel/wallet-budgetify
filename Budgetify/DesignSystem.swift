@@ -495,12 +495,19 @@ struct MoneyInputField: View {
 }
 
 struct BalanceCardSurface<Content: View>: View {
+    @EnvironmentObject private var settings: AppSettings
     @ViewBuilder var content: () -> Content
 
     var body: some View {
         content()
             .padding(1)
-            .background(LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing), in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .background(
+                ZStack {
+                    LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    LinearGradient(colors: [settings.accentPreset.color.opacity(0.22), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+                },
+                in: RoundedRectangle(cornerRadius: 26, style: .continuous)
+            )
             .shadow(color: BudgetifyPalette.cardShadow, radius: 24, y: 12)
     }
 }
@@ -577,9 +584,18 @@ struct EmptyState: View {
 struct AmbientBackground: View {
     var body: some View {
         ZStack {
-            BudgetifyPalette.canvas.ignoresSafeArea()
+            LinearGradient(
+                colors: [
+                    Color(light: "F3EEFF", dark: "180D31"),
+                    Color(light: "FAF8FF", dark: "0F0920"),
+                    Color(light: "F0EBFA", dark: "0A0712")
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
             Circle().fill(BudgetifyPalette.accent.opacity(0.10)).frame(width: 300).blur(radius: 70).offset(x: 150, y: -260)
-            Circle().fill(BudgetifyPalette.red.opacity(0.045)).frame(width: 280).blur(radius: 80).offset(x: -170, y: 300)
+            Circle().fill(BudgetifyPalette.purple.opacity(0.06)).frame(width: 280).blur(radius: 80).offset(x: -170, y: 300)
         }
         .allowsHitTesting(false)
     }
