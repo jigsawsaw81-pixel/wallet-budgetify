@@ -501,13 +501,13 @@ struct BalanceCardSurface<Content: View>: View {
     var body: some View {
         content()
             .padding(1)
-            .background(
+            .background {
                 ZStack {
                     LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing)
                     LinearGradient(colors: [settings.accentPreset.color.opacity(0.22), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
-                },
-                in: RoundedRectangle(cornerRadius: 26, style: .continuous)
-            )
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
+            }
             .shadow(color: BudgetifyPalette.cardShadow, radius: 24, y: 12)
     }
 }

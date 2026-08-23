@@ -438,13 +438,13 @@ struct HeroBalanceCard: View {
             .background(BudgetifyPalette.heroInset, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .padding(18)
-        .background(
+        .background {
             ZStack {
                 LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing)
                 LinearGradient(colors: [settings.accentPreset.color.opacity(0.26), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
-            },
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-        )
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        }
         .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(settings.accentPreset.color.opacity(0.32), lineWidth: 1))
         .shadow(color: BudgetifyPalette.cardShadow, radius: 18, y: 9)
         .accessibilityElement(children: .contain)
