@@ -1,0 +1,51 @@
+workflows:
+  unsigned-device-ipa:
+    name: Wallet unsigned iOS IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: latest
+    scripts:
+      - name: Build unsigned iPhoneOS app
+        script: |
+          set -euo pipefail
+          rm -rf build Payload Wallet-unsigned.ipa SHA256SUMS.txt
+          xcodebuild \
+            -project Wallet.xcodeproj \
+            -scheme Wallet \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build/derived-data \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="" \
+            ONLY_ACTIVE_ARCH=NO
+      - name: Validate device app bundle
+        script: |
+          set -euo pipefail
+          APP_PATH="build/derived-data/Build/Products/Release-iphoneos/Wallet.app"
+          PLIST="$APP_PATH/Info.plist"
+          test -d "$APP_PATH"
+          test -f "$PLIST"
+          /usr/bin/plutil -lint "$PLIST"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$PLIST")
+          IDENTIFIER=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")
+          test -n "$EXECUTABLE"
+          test -n "$IDENTIFIER"
+          test -f "$APP_PATH/$EXECUTABLE"
+          file "$APP_PATH/$EXECUTABLE" | grep -E 'Mach-O|current ar archive' >/dev/null
+      - name: Package and revalidate IPA
+        script: |
+          set -euo pipefail
+          APP_PATH="build/derived-data/Build/Products/Release-iphoneos/Wallet.app"
+          EXECUTABLE=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP_PATH/Info.plist")
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          ditto -c -k --keepParent Payload Wallet-unsigned.ipa
+          /usr/bin/shasum -a 256 Wallet-unsigned.ipa > SHA256SUMS.txt
+          /usr/bin/unzip -t Wallet-unsigned.ipa >/dev/null
+          /usr/bin/unzip -l Wallet-unsigned.ipa | grep -F "Payload/Wallet.app/$EXECUTABLE" >/dev/null
+    artifacts:
+      - Wallet-unsigned.ipa
+      - SHA256SUMS.txt
