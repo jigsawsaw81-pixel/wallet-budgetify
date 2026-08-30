@@ -131,7 +131,7 @@ struct ContentView: View {
                 .padding(.top, 8)
                 .transition(.move(edge: .top).combined(with: .opacity))
                 .task(id: toastTaskID) {
-                    try? await Task.sleep(for: .seconds(settings.undoDuration))
+                    try? await Task.sleep(for: .seconds(4))
                     withAnimation(.snappy) { store.dismissToast() }
                 }
             }
@@ -270,6 +270,15 @@ struct HomeView: View {
     @State private var heroMode = 0
     @State private var transactionToDelete: BudgetTransaction?
     @State private var showingDeleteConfirmation = false
+    @State private var searchText = ""
+
+    private var searchedTransactions: [BudgetTransaction] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty { return Array(store.transactions.prefix(5)) }
+        return store.transactions.filter {
+            $0.title.localizedCaseInsensitiveContains(query) || store.category(for: $0)?.name.localizedCaseInsensitiveContains(query) == true
+        }
+    }
 
     private var activeCommitmentTotal: Decimal {
         let recurring = store.recurringPayments.filter(\.isActive).reduce(Decimal.zero) { $0 + $1.amount }
@@ -329,12 +338,14 @@ struct HomeView: View {
                         SectionHeading(title: "Latest activity", subtitle: "Your newest records")
                         if store.transactions.isEmpty {
                             EmptyState(icon: "tray", title: "No transactions yet", message: "Add your first debit or credit to start seeing your financial rhythm.", actionTitle: "Add entry") { open(.debit) }
+                        } else if searchedTransactions.isEmpty {
+                            EmptyState(icon: "magnifyingglass", title: "No matches", message: "Try a different search term.", actionTitle: "Add entry") { open(.debit) }
                         } else {
                             VStack(spacing: 0) {
-                                ForEach(Array(store.transactions.prefix(5))) { transaction in
+                                ForEach(searchedTransactions) { transaction in
                                     Button { onEdit(transaction) } label: { TransactionRow(transaction: transaction) }
                                         .buttonStyle(.plain)
-                                        .budgetifyContextMenu(enabled: settings.holdActionsEnabled) {
+                                        .budgetifyContextMenu(enabled: true) {
                                             Button { onEdit(transaction) } label: { Label("Edit", systemImage: "pencil") }
                                             Button { onEdit(transaction) } label: { Label("Rename", systemImage: "character.cursor.ibeam") }
                                             Button { store.duplicateTransaction(transaction) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
@@ -385,7 +396,7 @@ struct HomeView: View {
             .alert("Delete transaction?", isPresented: $showingDeleteConfirmation) {
                 Button("Delete", role: .destructive) {
                     if let transactionToDelete {
-                        store.deleteTransaction(transactionToDelete, allowsUndo: settings.undoAfterDeletionEnabled)
+                        store.deleteTransaction(transactionToDelete, allowsUndo: true)
                     }
                     self.transactionToDelete = nil
                 }
@@ -441,11 +452,11 @@ struct HeroBalanceCard: View {
         .background {
             ZStack {
                 LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing)
-                LinearGradient(colors: [settings.accentPreset.color.opacity(0.26), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+                LinearGradient(colors: [BudgetifyPalette.accent.opacity(0.26), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
             }
             .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         }
-        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(settings.accentPreset.color.opacity(0.32), lineWidth: 1))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).stroke(BudgetifyPalette.accent.opacity(0.32), lineWidth: 1))
         .shadow(color: BudgetifyPalette.cardShadow, radius: 18, y: 9)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Net worth balance")
@@ -530,7 +541,7 @@ struct TransactionsView: View {
                                             }
                                         }
                                         .buttonStyle(.plain)
-                                        .budgetifyContextMenu(enabled: settings.holdActionsEnabled) {
+                                        .budgetifyContextMenu(enabled: true) {
                                             Button { onEdit(transaction) } label: { Label("Edit", systemImage: "pencil") }
                                             Button { onEdit(transaction) } label: { Label("Change", systemImage: "arrow.triangle.2.circlepath") }
                                             Button { store.duplicateTransaction(transaction) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
@@ -558,6 +569,7 @@ struct TransactionsView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
             .budgetifyNavigationChrome(clearNavigationBar: false)
+            .searchable(text: $store.query, prompt: "Search transactions")
             .toolbar {
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if isSelecting && !selectedIDs.isEmpty {
@@ -587,13 +599,13 @@ struct TransactionsView: View {
         .alert("Delete transactions?", isPresented: $showingDeleteConfirmation) {
             if let transactionToDelete {
                 Button("Delete", role: .destructive) {
-                    store.deleteTransaction(transactionToDelete, allowsUndo: settings.undoAfterDeletionEnabled)
+                    store.deleteTransaction(transactionToDelete, allowsUndo: true)
                     self.transactionToDelete = nil
                 }
             } else {
                 Button("Delete \(selectedIDs.count) transactions", role: .destructive) {
                     let selected = store.transactions.filter { selectedIDs.contains($0.id) }
-                    store.deleteTransactions(selected, allowsUndo: settings.undoAfterDeletionEnabled)
+                    store.deleteTransactions(selected, allowsUndo: true)
                     selectedIDs.removeAll()
                     isSelecting = false
                 }
