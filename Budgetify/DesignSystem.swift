@@ -53,69 +53,17 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     }
 }
 
-enum CurrencyDisplay: String, CaseIterable, Identifiable {
-    case inr
-
-    var id: String { rawValue }
-    var title: String { "INR · ₹" }
-}
-
-
-
-enum RowDensity: String, CaseIterable, Identifiable {
-    case compact
-    case comfortable
-    case spacious
-
-    var id: String { rawValue }
-    var title: String { rawValue.capitalized }
-    var verticalPadding: CGFloat {
-        switch self {
-        case .compact: 8
-        case .comfortable: 12
-        case .spacious: 17
-        }
-    }
-}
-
-enum AccentPreset: String, CaseIterable, Identifiable {
-    case teal
-    case indigo
-    case coral
-    case amber
-    case emerald
-
-    var id: String { rawValue }
-    var title: String { rawValue.capitalized }
-    var color: Color {
-        switch self {
-        case .teal: Color(hex: "006F6B")
-        case .indigo: Color(hex: "4F46A8")
-        case .coral: Color(hex: "B83A52")
-        case .amber: Color(hex: "9A5B00")
-        case .emerald: Color(hex: "087A54")
-        }
-    }
-}
-
 @MainActor
 final class AppSettings: ObservableObject {
     @Published var appearance: AppAppearance { didSet { save() } }
-    @Published var currencyDisplay: CurrencyDisplay { didSet { save() } }
     @Published var firstWeekday: Int { didSet { save() } }
-    @Published var holdActionsEnabled: Bool { didSet { save() } }
     @Published var notificationsEnabled: Bool { didSet { save() } }
 
-    @Published var undoDuration: Double { didSet { save() } }
-    @Published var deleteConfirmationEnabled: Bool { didSet { save() } }
-    @Published var undoAfterDeletionEnabled: Bool { didSet { save() } }
     @Published var defaultTransactionType: TransactionType { didSet { save() } }
     @Published var defaultWalletID: UUID? { didSet { save() } }
     @Published var defaultCategoryID: UUID? { didSet { save() } }
     @Published var showNotesByDefault: Bool { didSet { save() } }
     @Published var showPaymentMethodByDefault: Bool { didSet { save() } }
-    @Published var rowDensity: RowDensity { didSet { save() } }
-    @Published var accentPreset: AccentPreset { didSet { save() } }
     @Published var showTodaySpending: Bool { didSet { save() } }
     @Published var showMonthlySnapshot: Bool { didSet { save() } }
     @Published var showRecentActivity: Bool { didSet { save() } }
@@ -131,23 +79,15 @@ final class AppSettings: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         appearance = AppAppearance(rawValue: defaults.string(forKey: "budgetify.appearance") ?? "dark") ?? .dark
-        let storedCurrency = defaults.string(forKey: "budgetify.currencyDisplay") ?? "inr"
-        currencyDisplay = storedCurrency == "symbol" || storedCurrency == "code" ? .inr : (CurrencyDisplay(rawValue: storedCurrency) ?? .inr)
         let weekday = defaults.integer(forKey: "budgetify.firstWeekday")
         firstWeekday = weekday == 0 ? 2 : min(max(weekday, 1), 7)
-        holdActionsEnabled = defaults.object(forKey: "budgetify.holdActionsEnabled") as? Bool ?? true
         notificationsEnabled = defaults.object(forKey: "budgetify.notificationsEnabled") as? Bool ?? true
 
-        undoDuration = min(max(defaults.object(forKey: "budgetify.undoDuration") as? Double ?? 4, 2), 10)
-        deleteConfirmationEnabled = defaults.object(forKey: "budgetify.deleteConfirmationEnabled") as? Bool ?? true
-        undoAfterDeletionEnabled = defaults.object(forKey: "budgetify.undoAfterDeletionEnabled") as? Bool ?? true
         defaultTransactionType = TransactionType(rawValue: defaults.string(forKey: "budgetify.defaultTransactionType") ?? TransactionType.expense.rawValue) ?? .expense
         defaultWalletID = Self.uuid(defaults.string(forKey: "budgetify.defaultWalletID"))
         defaultCategoryID = Self.uuid(defaults.string(forKey: "budgetify.defaultCategoryID"))
         showNotesByDefault = defaults.object(forKey: "budgetify.showNotesByDefault") as? Bool ?? true
         showPaymentMethodByDefault = defaults.object(forKey: "budgetify.showPaymentMethodByDefault") as? Bool ?? true
-        rowDensity = RowDensity(rawValue: defaults.string(forKey: "budgetify.rowDensity") ?? "comfortable") ?? .comfortable
-        accentPreset = AccentPreset(rawValue: defaults.string(forKey: "budgetify.accentPreset") ?? "teal") ?? .teal
         showTodaySpending = defaults.object(forKey: "budgetify.showTodaySpending") as? Bool ?? true
         showMonthlySnapshot = defaults.object(forKey: "budgetify.showMonthlySnapshot") as? Bool ?? true
         showRecentActivity = defaults.object(forKey: "budgetify.showRecentActivity") as? Bool ?? true
@@ -186,21 +126,14 @@ final class AppSettings: ObservableObject {
     private func save() {
         let defaults = UserDefaults.standard
         defaults.set(appearance.rawValue, forKey: "budgetify.appearance")
-        defaults.set(currencyDisplay.rawValue, forKey: "budgetify.currencyDisplay")
         defaults.set(firstWeekday, forKey: "budgetify.firstWeekday")
-        defaults.set(holdActionsEnabled, forKey: "budgetify.holdActionsEnabled")
         defaults.set(notificationsEnabled, forKey: "budgetify.notificationsEnabled")
 
-        defaults.set(undoDuration, forKey: "budgetify.undoDuration")
-        defaults.set(deleteConfirmationEnabled, forKey: "budgetify.deleteConfirmationEnabled")
-        defaults.set(undoAfterDeletionEnabled, forKey: "budgetify.undoAfterDeletionEnabled")
         defaults.set(defaultTransactionType.rawValue, forKey: "budgetify.defaultTransactionType")
         defaults.set(defaultWalletID?.uuidString, forKey: "budgetify.defaultWalletID")
         defaults.set(defaultCategoryID?.uuidString, forKey: "budgetify.defaultCategoryID")
         defaults.set(showNotesByDefault, forKey: "budgetify.showNotesByDefault")
         defaults.set(showPaymentMethodByDefault, forKey: "budgetify.showPaymentMethodByDefault")
-        defaults.set(rowDensity.rawValue, forKey: "budgetify.rowDensity")
-        defaults.set(accentPreset.rawValue, forKey: "budgetify.accentPreset")
         defaults.set(showTodaySpending, forKey: "budgetify.showTodaySpending")
         defaults.set(showMonthlySnapshot, forKey: "budgetify.showMonthlySnapshot")
         defaults.set(showRecentActivity, forKey: "budgetify.showRecentActivity")
@@ -504,7 +437,7 @@ struct BalanceCardSurface<Content: View>: View {
             .background {
                 ZStack {
                     LinearGradient(colors: [BudgetifyPalette.heroGradientStart, BudgetifyPalette.heroGradientMid, BudgetifyPalette.heroGradientEnd], startPoint: .topLeading, endPoint: .bottomTrailing)
-                    LinearGradient(colors: [settings.accentPreset.color.opacity(0.22), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
+                    LinearGradient(colors: [BudgetifyPalette.accent.opacity(0.22), .clear], startPoint: .topLeading, endPoint: .bottomTrailing)
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
             }
