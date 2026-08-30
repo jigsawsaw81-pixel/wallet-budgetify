@@ -14,6 +14,19 @@ struct RecurringView: View {
     @State private var fixedToEdit: FixedExpense?
     @State private var showingRecurringDelete = false
     @State private var showingFixedDelete = false
+    @State private var searchText = ""
+
+    private var searchedRecurring: [RecurringPayment] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return store.recurringPayments }
+        return store.recurringPayments.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    private var searchedFixed: [FixedExpense] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return store.fixedExpenses }
+        return store.fixedExpenses.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
 
     var body: some View {
         NavigationStack {
@@ -22,9 +35,11 @@ struct RecurringView: View {
                     SectionHeading(title: "EMIs", subtitle: "Scheduled commitments", actionTitle: "Add") { showingRecurring = true }
                     if store.recurringPayments.isEmpty {
                         EmptyState(icon: "calendar.badge.clock", title: "Nothing scheduled", message: "Add an EMI to keep future commitments visible.", actionTitle: "Add EMI") { showingRecurring = true }
+                    } else if searchedRecurring.isEmpty {
+                        EmptyState(icon: "magnifyingglass", title: "No matches", message: "Try a different search term.", actionTitle: "Add EMI") { showingRecurring = true }
                     } else {
                         VStack(spacing: 0) {
-                            ForEach(store.recurringPayments) { payment in
+                            ForEach(searchedRecurring) { payment in
                                 HStack(spacing: 8) {
                                     Button { recurringToEdit = payment } label: { RecurringRow(payment: payment) }
                                         .buttonStyle(.plain)
@@ -34,7 +49,7 @@ struct RecurringView: View {
                                         .accessibilityLabel("\(payment.name) active")
                                 }
 
-                                .budgetifyContextMenu(enabled: settings.holdActionsEnabled) {
+                                .budgetifyContextMenu(enabled: true) {
                                     Button { recurringToEdit = payment } label: { Label("Edit", systemImage: "pencil") }
                                     Button { store.setActive(!payment.isActive, for: payment) } label: { Label(payment.isActive ? "Disable" : "Enable", systemImage: payment.isActive ? "pause.circle" : "play.circle") }
                                     Divider()
@@ -48,9 +63,11 @@ struct RecurringView: View {
                     SectionHeading(title: "Subscriptions", subtitle: "Recurring by frequency", actionTitle: "Add") { showingFixed = true }
                     if store.fixedExpenses.isEmpty {
                         EmptyState(icon: "arrow.clockwise", title: "No subscriptions", message: "Rent, utilities, and other predictable costs belong here.", actionTitle: "Add subscription") { showingFixed = true }
+                    } else if searchedFixed.isEmpty {
+                        EmptyState(icon: "magnifyingglass", title: "No matches", message: "Try a different search term.", actionTitle: "Add subscription") { showingFixed = true }
                     } else {
                         VStack(spacing: 0) {
-                            ForEach(store.fixedExpenses) { fixed in
+                            ForEach(searchedFixed) { fixed in
                                 HStack(spacing: 8) {
                                     Button { fixedToEdit = fixed } label: {
                                         HStack(spacing: 12) {
@@ -66,7 +83,7 @@ struct RecurringView: View {
                                         .accessibilityLabel("\(fixed.name) active")
                                 }
 
-                                .budgetifyContextMenu(enabled: settings.holdActionsEnabled) {
+                                .budgetifyContextMenu(enabled: true) {
                                     Button { fixedToEdit = fixed } label: { Label("Edit", systemImage: "pencil") }
                                     Button { store.setActive(!fixed.isActive, for: fixed) } label: { Label(fixed.isActive ? "Disable" : "Enable", systemImage: fixed.isActive ? "pause.circle" : "play.circle") }
                                     Divider()
@@ -77,19 +94,18 @@ struct RecurringView: View {
                         .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
                     }
-                    SectionHeading(title: "Plans", subtitle: "Your committed monthly rhythm")
-                    StandardCardSurface(cornerRadius: 22) {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "wand.and.stars").foregroundStyle(BudgetifyPalette.purple)
+                    SectionHeading(title: "Forecast", subtitle: "Your committed monthly rhythm")
+                    StandardCardSurface(cornerRadius: 20) {
+                        HStack(spacing: 14) {
+                            Image(systemName: "wand.and.stars").foregroundStyle(BudgetifyPalette.accent).frame(width: 40, height: 40).background(BudgetifyPalette.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                            VStack(alignment: .leading, spacing: 3) {
                                 Text("Cash-flow forecast").font(.body.weight(.semibold)).foregroundStyle(BudgetifyPalette.text)
-                                Spacer()
-                                AmountText(amount: store.forecast, color: store.forecast >= 0 ? BudgetifyPalette.green : BudgetifyPalette.red, fontSize: 18)
+                                Text("Balance after pending income, EMIs, and subscriptions.").font(.subheadline).foregroundStyle(BudgetifyPalette.secondary)
                             }
-                            Text("Balance after pending income, EMIs, and subscriptions.").font(.subheadline).foregroundStyle(BudgetifyPalette.secondary)
+                            Spacer(minLength: 6)
+                            AmountText(amount: store.forecast, color: store.forecast >= 0 ? BudgetifyPalette.green : BudgetifyPalette.red, fontSize: 18)
                         }
-                        .padding(16)
-                        .background(BudgetifyPalette.purple.opacity(0.08))
+                        .padding(14)
                     }
                 }.screenPadding().padding(.top, 12).padding(.bottom, 44)
             }
@@ -97,6 +113,7 @@ struct RecurringView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
             .budgetifyNavigationChrome(clearNavigationBar: false)
+            .searchable(text: $searchText, prompt: "Search EMIs & subscriptions")
         }
         .sheet(isPresented: $showingRecurring) { RecurringEditor() }
         .sheet(isPresented: $showingFixed) { FixedExpenseEditor() }
@@ -138,6 +155,20 @@ struct WalletsView: View {
     @State private var groupToEdit: AccountGroup?
     @State private var groupToDelete: AccountGroup?
     @State private var showingGroupDelete = false
+    @State private var searchText = ""
+
+    private func matchingWallets(in group: AccountGroup) -> [Wallet] {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let groupWallets = store.wallets.filter { $0.groupID == group.id }
+        guard !query.isEmpty else { return groupWallets }
+        return groupWallets.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+
+    private func groupMatchesSearch(_ group: AccountGroup) -> Bool {
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty { return true }
+        return group.label.localizedCaseInsensitiveContains(query) || !matchingWallets(in: group).isEmpty
+    }
 
     var body: some View {
         NavigationStack {
@@ -147,17 +178,18 @@ struct WalletsView: View {
                     BalanceCardSurface {
                         HStack { VStack(alignment: .leading, spacing: 5) { Text("Total balance").font(.subheadline.weight(.medium)).foregroundStyle(BudgetifyPalette.heroSecondary); AmountText(amount: store.grandTotal, color: BudgetifyPalette.heroText, fontSize: 29) }; Spacer(); Image(systemName: "wallet.pass.fill").font(.title.weight(.semibold)).foregroundStyle(BudgetifyPalette.heroSecondary) }.padding(18)
                     }
-                    ForEach(store.groups) { group in
-                        let groupWallets = store.wallets.filter { $0.groupID == group.id }
+                    ForEach(store.groups.filter(groupMatchesSearch)) { group in
+                        let groupWallets = matchingWallets(in: group)
+                        let isExpanded = expanded.contains(group.id) || !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         VStack(spacing: 0) {
                             Button { withAnimation(.snappy) { if expanded.contains(group.id) { expanded.remove(group.id) } else { expanded.insert(group.id) } };  } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: group.symbol).foregroundStyle(Color(hex: group.colorHex)).frame(width: 34, height: 34).background(Color(hex: group.colorHex).opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                                     VStack(alignment: .leading, spacing: 2) { Text(group.label).font(.body.weight(.bold)).foregroundStyle(BudgetifyPalette.text); Text("\(groupWallets.count) account\(groupWallets.count == 1 ? "" : "s")").font(.subheadline).foregroundStyle(BudgetifyPalette.muted) }
-                                    Spacer(); AmountText(amount: store.balance(for: group), color: Color(hex: group.colorHex), fontSize: 16); Image(systemName: expanded.contains(group.id) ? "chevron.up" : "chevron.down").font(.caption.weight(.bold)).foregroundStyle(BudgetifyPalette.muted)
+                                    Spacer(); AmountText(amount: store.balance(for: group), color: Color(hex: group.colorHex), fontSize: 16); Image(systemName: isExpanded ? "chevron.up" : "chevron.down").font(.caption.weight(.bold)).foregroundStyle(BudgetifyPalette.muted)
                                 }.padding(14)
                             }.buttonStyle(.plain).accessibilityLabel("\(group.label), \(groupWallets.count) accounts")
-                            if expanded.contains(group.id) {
+                            if isExpanded {
                                 ForEach(groupWallets) { wallet in
                                     Button { walletToEdit = wallet } label: {
                                         HStack(spacing: 12) {
@@ -168,7 +200,7 @@ struct WalletsView: View {
                                     }
                                     .buttonStyle(.plain)
 
-                                    .budgetifyContextMenu(enabled: settings.holdActionsEnabled) {
+                                    .budgetifyContextMenu(enabled: true) {
                                         Button { walletToEdit = wallet } label: { Label("Edit a/c", systemImage: "pencil") }
                                         Divider()
                                         Button(role: .destructive) { walletToDelete = wallet; showingWalletDelete = true } label: { Label("Delete a/c", systemImage: "trash") }
@@ -178,7 +210,7 @@ struct WalletsView: View {
                         }
                         .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
-                        .budgetifyContextMenu(enabled: settings.holdActionsEnabled) {
+                        .budgetifyContextMenu(enabled: true) {
                             Button { groupToEdit = group } label: { Label("Edit a/c group", systemImage: "pencil") }
                             Divider()
                             Button(role: .destructive) { groupToDelete = group; showingGroupDelete = true } label: { Label("Delete a/c group", systemImage: "trash") }
@@ -190,6 +222,7 @@ struct WalletsView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationBarTitleDisplayMode(.inline)
             .budgetifyNavigationChrome(clearNavigationBar: false)
+            .searchable(text: $searchText, prompt: "Search accounts")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -232,7 +265,6 @@ struct SettingsView: View {
     @State private var showingRecurring = false
     @State private var showingDeleteAllConfirmation = false
     @State private var showingNavbarLimit = false
-    @State private var draggedNavbarItem: NavbarTab?
 
     private let weekdayNames = Calendar.current.weekdaySymbols
 
@@ -248,12 +280,6 @@ struct SettingsView: View {
                         }
                         .pickerStyle(.segmented)
                         .tint(BudgetifyPalette.accent)
-                    }
-
-                    settingsSection(title: "Currency", icon: "indianrupeesign.circle") {
-                        Picker("Currency", selection: $settings.currencyDisplay) {
-                            ForEach(CurrencyDisplay.allCases) { Text($0.title).tag($0) }
-                        }
                     }
 
                     settingsSection(title: "Transactions", icon: "list.bullet.rectangle.portrait") {
@@ -272,9 +298,6 @@ struct SettingsView: View {
                             .tint(BudgetifyPalette.accent)
                         Toggle("Show payment method by default", isOn: $settings.showPaymentMethodByDefault)
                             .tint(BudgetifyPalette.accent)
-                        Picker("Transaction row density", selection: $settings.rowDensity) {
-                            ForEach(RowDensity.allCases) { Text($0.title).tag($0) }
-                        }
                     }
 
                     settingsSection(title: "Dashboard", icon: "rectangle.grid.2x2") {
@@ -286,40 +309,18 @@ struct SettingsView: View {
                     }
 
                     settingsSection(title: "Navigation Bar", icon: "rectangle.bottomthird.inset.filled") {
-                        Text("Choose up to five destinations or shortcuts. Drag enabled items to change their order; changes apply immediately.")
+                        Text("Choose up to five destinations or shortcuts.")
                             .font(.subheadline)
                             .foregroundStyle(BudgetifyPalette.secondary)
-                        ForEach(NavbarTab.allCases) { item in
+                        ForEach(NavbarTab.allCases.filter { $0 != .settings }) { item in
                             Toggle(isOn: Binding(
-                                get: { settings.navbarTabs.contains(item) || item == .settings },
+                                get: { settings.navbarTabs.contains(item) },
                                 set: { enabled in setNavbarItem(item, enabled: enabled) }
                             )) {
                                 Label(item.title, systemImage: item.systemImage)
                             }
                             .tint(BudgetifyPalette.accent)
-                            .disabled(item == .settings || (!settings.navbarTabs.contains(item) && settings.navbarTabs.count >= 5))
-                        }
-                        Divider().overlay(BudgetifyPalette.divider)
-                        Text("Enabled order")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(BudgetifyPalette.text)
-                        ForEach(settings.navbarTabs) { item in
-                            HStack(spacing: 12) {
-                                Image(systemName: item.systemImage)
-                                    .foregroundStyle(BudgetifyPalette.accent)
-                                    .frame(width: 24)
-                                Text(item.title)
-                                    .foregroundStyle(BudgetifyPalette.text)
-                                Spacer()
-                                Image(systemName: "line.3.horizontal")
-                                    .foregroundStyle(BudgetifyPalette.muted)
-                                    .contentShape(Rectangle())
-                                    .onDrag {
-                                        draggedNavbarItem = item
-                                        return NSItemProvider(object: item.rawValue as NSString)
-                                    }
-                            }
-                            .onDrop(of: [.text], delegate: NavbarDropDelegate(target: item, tabs: $settings.navbarTabs, draggedItem: $draggedNavbarItem))
+                            .disabled(!settings.navbarTabs.contains(item) && settings.navbarTabs.count >= 5)
                         }
                         Text("Settings stays available so you can always restore hidden destinations. Add is enabled by default and opens a direct Paying or Receiving form.")
                             .font(.footnote)
@@ -330,33 +331,11 @@ struct SettingsView: View {
                         Text("Personalize the way Wallet looks and behaves.")
                             .font(.subheadline)
                             .foregroundStyle(BudgetifyPalette.secondary)
-                        Picker("Accent color", selection: $settings.accentPreset) {
-                            ForEach(AccentPreset.allCases) { preset in
-                                Text(preset.title).tag(preset)
-                            }
-                        }
-                        .tint(settings.accentPreset.color)
                         Picker("First day of week", selection: $settings.firstWeekday) {
                             ForEach(1...7, id: \.self) { Text(weekdayNames[$0 - 1]).tag($0) }
                         }
-                        Toggle("Press-and-hold actions", isOn: $settings.holdActionsEnabled)
-                            .tint(settings.accentPreset.color)
-                        Toggle("Confirm before deleting", isOn: $settings.deleteConfirmationEnabled)
-                            .tint(settings.accentPreset.color)
-                        Toggle("Show undo after deletion", isOn: $settings.undoAfterDeletionEnabled)
-                            .tint(settings.accentPreset.color)
-                        if settings.undoAfterDeletionEnabled {
-                            HStack {
-                                Text("Undo duration")
-                                Spacer()
-                                Text("\(Int(settings.undoDuration)) sec")
-                                    .foregroundStyle(BudgetifyPalette.secondary)
-                            }
-                            Slider(value: $settings.undoDuration, in: 2...10, step: 1)
-                                .tint(settings.accentPreset.color)
-                        }
                         Toggle("Reduce motion", isOn: $settings.reduceMotionEnabled)
-                            .tint(settings.accentPreset.color)
+                            .tint(BudgetifyPalette.accent)
                         Divider().overlay(BudgetifyPalette.divider)
                         Text("Customize the fields used by the Add shortcut.")
                             .font(.subheadline)
@@ -366,9 +345,9 @@ struct SettingsView: View {
                             Text("Receiving").tag(TransactionType.income)
                         }
                         Toggle("Offer category in shortcut", isOn: $settings.shortcutIncludesCategory)
-                            .tint(settings.accentPreset.color)
+                            .tint(BudgetifyPalette.accent)
                         Toggle("Offer note in shortcut", isOn: $settings.shortcutIncludesNote)
-                            .tint(settings.accentPreset.color)
+                            .tint(BudgetifyPalette.accent)
                     }
 
                     settingsSection(title: "Notifications", icon: "bell.badge") {
@@ -393,7 +372,7 @@ struct SettingsView: View {
                         .buttonStyle(StandardButtonStyle())
                     }
 
-                    settingsSection(title: "Data & Privacy", icon: "externaldrive.fill") {
+                    settingsSection(title: "Data", icon: "externaldrive.fill") {
                         if let data = store.exportData() {
                             ShareLink(item: data, preview: SharePreview("Wallet backup", image: Image(systemName: "doc.text"))) {
                                 Label("Export all data", systemImage: "arrow.up.doc")
@@ -418,31 +397,23 @@ struct SettingsView: View {
                             .foregroundStyle(BudgetifyPalette.secondary)
                     }
 
-                    settingsSection(title: "About & Help", icon: "questionmark.circle") {
-                        if let helpURL = URL(string: "https://help.manus.im") {
-                            Link(destination: helpURL) {
-                                Label("Help & FAQ", systemImage: "questionmark.circle")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(StandardButtonStyle())
-                        }
-                        if let privacyURL = URL(string: "https://www.apple.com/legal/privacy/") {
-                            Link(destination: privacyURL) {
-                                Label("Privacy information", systemImage: "hand.raised")
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .buttonStyle(StandardButtonStyle())
+                    settingsSection(title: "About Wallet", icon: "info.circle") {
+                        HStack {
+                            Text("App Developer")
+                            Spacer()
+                            Text("Abhijeet Mitra")
+                                .foregroundStyle(BudgetifyPalette.secondary)
                         }
                         HStack {
-                            Text("Wallet")
+                            Text("Current Build Number")
                             Spacer()
-                            Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0")
+                            Text(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1")
+                                .foregroundStyle(BudgetifyPalette.secondary)
                         }
                         .font(.footnote.weight(.medium))
-                        .foregroundStyle(BudgetifyPalette.secondary)
                     }
 
-                    settingsSection(title: "Account", icon: "person.crop.circle") {
+                    settingsSection(title: "Reset", icon: "person.crop.circle") {
                         Text("Wallet works offline and stores records locally on this device.")
                             .font(.subheadline)
                             .foregroundStyle(BudgetifyPalette.secondary)
@@ -450,7 +421,7 @@ struct SettingsView: View {
                             .buttonStyle(StandardButtonStyle())
                     }
 
-                    Text("Wallet · Liquid Glass ready")
+                    Text("Wallet (Beta)")
                         .font(.footnote.weight(.medium))
                         .foregroundStyle(BudgetifyPalette.muted)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -513,32 +484,6 @@ struct SettingsView: View {
         .padding(16)
         .background(BudgetifyPalette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: BudgetifyPalette.cardShadow, radius: 12, y: 4)
-    }
-}
-
-private struct NavbarDropDelegate: DropDelegate {
-    let target: NavbarTab
-    @Binding var tabs: [NavbarTab]
-    @Binding var draggedItem: NavbarTab?
-
-    func dropEntered(info: DropInfo) {
-        guard let draggedItem, draggedItem != target,
-              let sourceIndex = tabs.firstIndex(of: draggedItem),
-              tabs.contains(target) else { return }
-        withAnimation(.snappy) {
-            tabs.remove(at: sourceIndex)
-            let adjustedTarget = tabs.firstIndex(of: target) ?? tabs.endIndex
-            tabs.insert(draggedItem, at: adjustedTarget)
-        }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        draggedItem = nil
-        return true
     }
 }
 
